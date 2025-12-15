@@ -508,3 +508,182 @@ func TestNajdorf(t *testing.T) {
 	}
 	t.Logf("Parsed %d games from najdorf.pgn", count)
 }
+
+// TestCQLMate tests CQL mate filter.
+func TestCQLMate(t *testing.T) {
+	// Filter for games containing checkmate positions
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "mate", inputFile("test-checkmate.pgn"))
+	count := countGames(stdout)
+	if count == 0 {
+		t.Error("Expected at least one checkmate game")
+	}
+	t.Logf("CQL mate filter: found %d games", count)
+}
+
+// TestCQLPieceOnSquare tests CQL piece filter.
+func TestCQLPieceOnSquare(t *testing.T) {
+	// Filter for games where there's a white pawn on e2 at any point
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "piece P e2", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	// Most games start with pawns on e2 before 1.e4
+	t.Logf("CQL piece filter: found %d games with P on e2", count)
+	// Also test piece P e4 which is common after 1.e4
+	stdout2, _ := runPgnExtract(t, "-s", "--cql", "piece P e4", inputFile("fischer.pgn"))
+	count2 := countGames(stdout2)
+	t.Logf("CQL piece filter: found %d games with P on e4", count2)
+	if count == 0 && count2 == 0 {
+		t.Error("Expected at least one game with P on e2 or e4")
+	}
+}
+
+// TestCQLCheck tests CQL check filter.
+func TestCQLCheck(t *testing.T) {
+	// Filter for games that contain a check position
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "check", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL check filter: found %d games with check position", count)
+}
+
+// TestCQLLogical tests CQL logical operators.
+func TestCQLLogical(t *testing.T) {
+	// Filter for games with checkmate AND white to move
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "(and mate wtm)", inputFile("test-checkmate.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL logical AND (mate wtm): found %d games", count)
+}
+
+// TestCQLInvalidQuery tests that invalid CQL queries produce an error.
+func TestCQLInvalidQuery(t *testing.T) {
+	_, stderr := runPgnExtract(t, "--cql", "(and", inputFile("fischer.pgn"))
+	if !strings.Contains(stderr, "error") && !strings.Contains(stderr, "Error") {
+		t.Error("Expected error message for invalid CQL query")
+	}
+}
+
+// TestCQLPieceSet tests CQL piece set designators like [RQ].
+func TestCQLPieceSet(t *testing.T) {
+	// Filter for games with rook or queen on the back rank
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "piece [RQ] [a-h]1", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL piece set [RQ] on rank 1: found %d games", count)
+	// Most games should have this in starting position
+	if count == 0 {
+		t.Error("Expected games with R or Q on rank 1")
+	}
+}
+
+// TestCQLSquareRange tests CQL square range patterns.
+func TestCQLSquareRange(t *testing.T) {
+	// Filter for games with any white piece on the e-file
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "piece A e[1-8]", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL square range e[1-8]: found %d games", count)
+	if count == 0 {
+		t.Error("Expected games with white piece on e-file")
+	}
+}
+
+// TestCQLCount tests CQL count filter.
+func TestCQLCount(t *testing.T) {
+	// Filter for games where white has less than 8 pawns at some point
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "(< (count P) 8)", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL count (P < 8): found %d games", count)
+	// Any game with pawn captures should match
+	if count == 0 {
+		t.Error("Expected games with pawn count less than 8")
+	}
+}
+
+// TestCQLMaterial tests CQL material filter.
+func TestCQLMaterial(t *testing.T) {
+	// Filter for games with material imbalance
+	stdout, _ := runPgnExtract(t, "-s", "--cql", `(> (material "white") (material "black"))`, inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL material imbalance: found %d games", count)
+}
+
+// TestCQLFlip tests CQL flip transformation.
+func TestCQLFlip(t *testing.T) {
+	// Filter for games with castled king (either side using flip)
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "(flip (piece K g1))", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL flip (castled king): found %d games", count)
+}
+
+// TestCQLNot tests CQL not operator.
+func TestCQLNot(t *testing.T) {
+	// Filter for games that don't have mate positions
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "(not mate)", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL not mate: found %d games", count)
+}
+
+// TestCQLOr tests CQL or operator.
+func TestCQLOr(t *testing.T) {
+	// Filter for games with either mate or stalemate
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "(or mate stalemate)", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL or (mate stalemate): found %d games", count)
+}
+
+// TestCQLComplex tests complex CQL queries.
+func TestCQLComplex(t *testing.T) {
+	// Complex query: check with a knight or bishop
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "(and check (attack [NB] k))", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL complex (check with knight or bishop): found %d games", count)
+}
+
+// TestCQLBackRankMate tests finding back rank mate patterns.
+func TestCQLBackRankMate(t *testing.T) {
+	// Back rank mate: mate with rook or queen on 8th rank attacking black king
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "(and mate (piece [RQ] [a-h]8))", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL back rank mate pattern: found %d games", count)
+}
+
+// TestCQLAllPiecesFilter tests CQL with A (any piece) designator.
+func TestCQLAllPiecesFilter(t *testing.T) {
+	// Find positions where there's any white piece on d4
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "piece A d4", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL any white piece on d4: found %d games", count)
+}
+
+// TestCQLEmptySquare tests CQL with _ (empty) designator.
+func TestCQLEmptySquare(t *testing.T) {
+	// Find positions where e4 is empty (before 1.e4)
+	stdout, _ := runPgnExtract(t, "-s", "--cql", "piece _ e4", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL empty square e4: found %d games", count)
+	// All games start with e4 empty
+	if count == 0 {
+		t.Error("Expected games with e4 empty (at start)")
+	}
+}
+
+// TestCQLFile tests reading CQL query from a file.
+func TestCQLFile(t *testing.T) {
+	// Create a temporary CQL file
+	cqlFile, err := os.CreateTemp("", "test*.cql")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(cqlFile.Name())
+
+	// Write a CQL query to the file
+	_, err = cqlFile.WriteString("mate")
+	if err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	cqlFile.Close()
+
+	// Test reading CQL from file
+	stdout, _ := runPgnExtract(t, "-s", "--cql-file", cqlFile.Name(), inputFile("test-checkmate.pgn"))
+	count := countGames(stdout)
+	t.Logf("CQL from file: found %d games with mate", count)
+	if count != 1 {
+		t.Errorf("Expected 1 checkmate game from file query, got %d", count)
+	}
+}

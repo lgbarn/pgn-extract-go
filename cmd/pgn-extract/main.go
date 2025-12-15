@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
 	"github.com/lgbarn/pgn-extract-go/internal/config"
+	"github.com/lgbarn/pgn-extract-go/internal/cql"
 	"github.com/lgbarn/pgn-extract-go/internal/eco"
 	"github.com/lgbarn/pgn-extract-go/internal/engine"
 	"github.com/lgbarn/pgn-extract-go/internal/hashing"
@@ -51,6 +53,10 @@ var (
 	// Ending filters
 	checkmateFilter = flag.Bool("checkmate", false, "Only output games ending in checkmate")
 	stalemateFilter = flag.Bool("stalemate", false, "Only output games ending in stalemate")
+
+	// CQL filter
+	cqlQuery = flag.String("cql", "", "CQL query to filter games by position patterns")
+	cqlFile  = flag.String("cql-file", "", "File containing CQL query")
 
 	// Other options
 	quiet         = flag.Bool("s", false, "Silent mode (no game count)")
@@ -158,6 +164,26 @@ func main() {
 		}
 	}
 
+	// Parse CQL query if specified (from file or command line)
+	var cqlNode cql.Node
+	cqlQueryStr := *cqlQuery
+	if *cqlFile != "" {
+		content, err := os.ReadFile(*cqlFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading CQL file %s: %v\n", *cqlFile, err)
+			os.Exit(1)
+		}
+		cqlQueryStr = strings.TrimSpace(string(content))
+	}
+	if cqlQueryStr != "" {
+		var err error
+		cqlNode, err = cql.Parse(cqlQueryStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing CQL query: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	// Process input files or stdin
 	args := flag.Args()
 	var totalGames, outputGames, duplicates int
@@ -166,7 +192,7 @@ func main() {
 		// Read from stdin
 		games := processInput(os.Stdin, "stdin", cfg)
 		totalGames = len(games)
-		outputGames, duplicates = outputGamesWithProcessing(games, cfg, detector, ecoClassifier, gameFilter)
+		outputGames, duplicates = outputGamesWithProcessing(games, cfg, detector, ecoClassifier, gameFilter, cqlNode)
 	} else {
 		// Process each input file
 		for _, filename := range args {
@@ -178,7 +204,7 @@ func main() {
 
 			games := processInput(file, filename, cfg)
 			totalGames += len(games)
-			out, dup := outputGamesWithProcessing(games, cfg, detector, ecoClassifier, gameFilter)
+			out, dup := outputGamesWithProcessing(games, cfg, detector, ecoClassifier, gameFilter, cqlNode)
 			outputGames += out
 			duplicates += dup
 
@@ -264,7 +290,7 @@ func processInput(r io.Reader, name string, cfg *config.Config) []*chess.Game {
 
 // outputGamesWithProcessing outputs games with optional filtering, ECO classification, and duplicate detection.
 // Returns the number of games output and the number of duplicates found.
-func outputGamesWithProcessing(games []*chess.Game, cfg *config.Config, detector *hashing.DuplicateDetector, ecoClassifier *eco.ECOClassifier, gameFilter *matching.GameFilter) (int, int) {
+func outputGamesWithProcessing(games []*chess.Game, cfg *config.Config, detector *hashing.DuplicateDetector, ecoClassifier *eco.ECOClassifier, gameFilter *matching.GameFilter, cqlNode cql.Node) (int, int) {
 	outputCount := 0
 	duplicateCount := 0
 
@@ -281,6 +307,13 @@ func outputGamesWithProcessing(games []*chess.Game, cfg *config.Config, detector
 		if gameFilter != nil && gameFilter.HasCriteria() {
 			if !gameFilter.MatchGame(game) {
 				continue // Skip non-matching games
+			}
+		}
+
+		// Check CQL filter - evaluate against every position in the game
+		if cqlNode != nil {
+			if !matchesCQL(game, cqlNode) {
+				continue // Skip games that don't match CQL
 			}
 		}
 
@@ -352,6 +385,41 @@ func outputGamesWithProcessing(games []*chess.Game, cfg *config.Config, detector
 	}
 
 	return outputCount, duplicateCount
+}
+
+// matchesCQL checks if any position in the game matches the CQL query.
+func matchesCQL(game *chess.Game, cqlNode cql.Node) bool {
+	var board *chess.Board
+	var err error
+
+	// Check if game has a custom starting position (FEN tag)
+	if fen, ok := game.Tags["FEN"]; ok {
+		board, err = engine.NewBoardFromFEN(fen)
+		if err != nil {
+			board, _ = engine.NewBoardFromFEN(engine.InitialFEN)
+		}
+	} else {
+		board, _ = engine.NewBoardFromFEN(engine.InitialFEN)
+	}
+
+	// Check starting position
+	eval := cql.NewEvaluator(board)
+	if eval.Evaluate(cqlNode) {
+		return true
+	}
+
+	// Check each position after a move
+	for move := game.Moves; move != nil; move = move.Next {
+		if !engine.ApplyMove(board, move) {
+			break
+		}
+		eval = cql.NewEvaluator(board)
+		if eval.Evaluate(cqlNode) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // replayGame replays a game from the initial position to get the final board state.
