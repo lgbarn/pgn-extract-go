@@ -36,9 +36,10 @@ type TagCriterion struct {
 
 // TagMatcher provides tag-based game filtering.
 type TagMatcher struct {
-	criteria     []*TagCriterion
-	useSoundex   bool
-	matchAll     bool // true = AND all criteria, false = OR
+	criteria       []*TagCriterion
+	useSoundex     bool
+	substringMatch bool
+	matchAll       bool // true = AND all criteria, false = OR
 }
 
 // NewTagMatcher creates a new tag matcher.
@@ -56,6 +57,11 @@ func (tm *TagMatcher) SetMatchAll(all bool) {
 // SetUseSoundex enables soundex matching for player names.
 func (tm *TagMatcher) SetUseSoundex(use bool) {
 	tm.useSoundex = use
+}
+
+// SetSubstringMatch enables substring matching for all tag values.
+func (tm *TagMatcher) SetSubstringMatch(use bool) {
+	tm.substringMatch = use
 }
 
 // AddCriterion adds a tag matching criterion.

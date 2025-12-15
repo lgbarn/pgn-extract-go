@@ -154,3 +154,8 @@ func (gf *GameFilter) HasCriteria() bool {
 func (gf *GameFilter) SetUseSoundex(use bool) {
 	gf.TagMatcher.SetUseSoundex(use)
 }
+
+// SetSubstringMatch enables substring matching for tag values.
+func (gf *GameFilter) SetSubstringMatch(use bool) {
+	gf.TagMatcher.SetSubstringMatch(use)
+}

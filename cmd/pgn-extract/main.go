@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
@@ -22,11 +24,14 @@ import (
 var (
 	// Output options
 	outputFile    = flag.String("o", "", "Output file (default: stdout)")
+	appendOutput  = flag.Bool("a", false, "Append to output file instead of overwrite")
 	sevenTagOnly  = flag.Bool("7", false, "Output only the seven tag roster")
 	noTags        = flag.Bool("notags", false, "Don't output any tags")
 	lineLength    = flag.Int("w", 80, "Maximum line length")
-	outputFormat  = flag.String("W", "", "Output format: san, lalg, halg, elalg, uci")
+	outputFormat  = flag.String("W", "", "Output format: san, lalg, halg, elalg, uci, epd, fen")
 	jsonOutput    = flag.Bool("J", false, "Output in JSON format")
+	splitGames    = flag.Int("#", 0, "Split output into files of N games each")
+	splitByECO    = flag.String("E", "", "Split output by ECO level (1-3)")
 
 	// Content options
 	noComments    = flag.Bool("C", false, "Don't output comments")
@@ -37,26 +42,72 @@ var (
 	// Duplicate detection
 	suppressDuplicates = flag.Bool("D", false, "Suppress duplicate games")
 	duplicateFile      = flag.String("d", "", "Output duplicates to this file")
+	outputDupsOnly     = flag.Bool("U", false, "Output only duplicates (suppress unique games)")
+	checkFile          = flag.String("c", "", "Check file for duplicate detection")
 
 	// ECO classification
 	ecoFile = flag.String("e", "", "ECO classification file (PGN format)")
 
 	// Filtering options
-	tagFile      = flag.String("t", "", "Tag criteria file for filtering")
-	playerFilter = flag.String("p", "", "Filter by player name (either color)")
-	whiteFilter  = flag.String("Tw", "", "Filter by White player")
-	blackFilter  = flag.String("Tb", "", "Filter by Black player")
-	ecoFilter    = flag.String("Te", "", "Filter by ECO code prefix")
-	resultFilter = flag.String("Tr", "", "Filter by result (1-0, 0-1, 1/2-1/2)")
-	fenFilter    = flag.String("Tf", "", "Filter by FEN position")
+	tagFile          = flag.String("t", "", "Tag criteria file for filtering")
+	playerFilter     = flag.String("p", "", "Filter by player name (either color)")
+	whiteFilter      = flag.String("Tw", "", "Filter by White player")
+	blackFilter      = flag.String("Tb", "", "Filter by Black player")
+	ecoFilter        = flag.String("Te", "", "Filter by ECO code prefix")
+	resultFilter     = flag.String("Tr", "", "Filter by result (1-0, 0-1, 1/2-1/2)")
+	fenFilter        = flag.String("Tf", "", "Filter by FEN position")
+	negateMatch      = flag.Bool("n", false, "Output games that DON'T match criteria")
+	useSoundex       = flag.Bool("S", false, "Use Soundex for player name matching")
+	tagSubstring     = flag.Bool("tagsubstr", false, "Match tag values anywhere (substring)")
+
+	// Ply/move bounds
+	minPly    = flag.Int("minply", 0, "Minimum ply count")
+	maxPly    = flag.Int("maxply", 0, "Maximum ply count (0 = no limit)")
+	minMoves  = flag.Int("minmoves", 0, "Minimum number of moves")
+	maxMoves  = flag.Int("maxmoves", 0, "Maximum number of moves (0 = no limit)")
+	stopAfter = flag.Int("stopafter", 0, "Stop after matching N games")
 
 	// Ending filters
 	checkmateFilter = flag.Bool("checkmate", false, "Only output games ending in checkmate")
 	stalemateFilter = flag.Bool("stalemate", false, "Only output games ending in stalemate")
 
+	// Game feature filters
+	fiftyMoveFilter       = flag.Bool("fifty", false, "Games with 50-move rule")
+	repetitionFilter      = flag.Bool("repetition", false, "Games with 3-fold repetition")
+	underpromotionFilter  = flag.Bool("underpromotion", false, "Games with underpromotion")
+	commentedFilter       = flag.Bool("commented", false, "Only games with comments")
+	higherRatedWinner     = flag.Bool("higherratedwinner", false, "Higher-rated player won")
+	lowerRatedWinner      = flag.Bool("lowerratedwinner", false, "Lower-rated player won")
+
 	// CQL filter
 	cqlQuery = flag.String("cql", "", "CQL query to filter games by position patterns")
 	cqlFile  = flag.String("cql-file", "", "File containing CQL query")
+
+	// Variation matching
+	variationFile = flag.String("v", "", "File with move sequences to match")
+	positionFile  = flag.String("x", "", "File with positional variations to match")
+
+	// Material matching
+	materialMatch      = flag.String("z", "", "Material balance to match (e.g., 'QR:qrr')")
+	materialMatchExact = flag.String("y", "", "Exact material balance to match")
+
+	// Annotations
+	addPlyCount    = flag.Bool("plycount", false, "Add PlyCount tag")
+	addFENComments = flag.Bool("fencomments", false, "Add FEN comment after each move")
+	addHashComments = flag.Bool("hashcomments", false, "Add position hash after each move")
+	addHashcodeTag = flag.Bool("addhashcode", false, "Add HashCode tag")
+
+	// Tag management
+	fixResultTags  = flag.Bool("fixresulttags", false, "Fix inconsistent result tags")
+	fixTagStrings  = flag.Bool("fixtagstrings", false, "Fix malformed tag strings")
+
+	// Logging
+	logFile    = flag.String("l", "", "Write diagnostics to log file")
+	appendLog  = flag.String("L", "", "Append diagnostics to log file")
+	reportOnly = flag.Bool("r", false, "Report errors without extracting games")
+
+	// Polyglot hash
+	hashMatch = flag.String("H", "", "Match positions by polyglot hashcode")
 
 	// Other options
 	quiet         = flag.Bool("s", false, "Silent mode (no game count)")
@@ -65,6 +116,9 @@ var (
 )
 
 const programVersion = "0.1.0"
+
+// Global state for stopAfter
+var matchedCount int
 
 func main() {
 	flag.Usage = usage
@@ -85,15 +139,48 @@ func main() {
 	// Apply flags to config
 	applyFlags(cfg)
 
+	// Set up logging
+	if *logFile != "" {
+		file, err := os.Create(*logFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating log file %s: %v\n", *logFile, err)
+			os.Exit(1)
+		}
+		defer file.Close()
+		cfg.LogFile = file
+	}
+	if *appendLog != "" {
+		file, err := os.OpenFile(*appendLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening log file %s: %v\n", *appendLog, err)
+			os.Exit(1)
+		}
+		defer file.Close()
+		cfg.LogFile = file
+	}
+
 	// Set up output file
 	if *outputFile != "" {
-		file, err := os.Create(*outputFile)
+		var file *os.File
+		var err error
+		if *appendOutput {
+			file, err = os.OpenFile(*outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		} else {
+			file, err = os.Create(*outputFile)
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating output file %s: %v\n", *outputFile, err)
 			os.Exit(1)
 		}
 		defer file.Close()
 		cfg.OutputFile = file
+	}
+
+	// Set up non-matching file for -n flag
+	var nonMatchFile *os.File
+	if *negateMatch && *outputFile != "" {
+		cfg.NonMatchingFile = cfg.OutputFile
+		cfg.OutputFile = nil // Don't output matching games
 	}
 
 	// Set up duplicate file
@@ -111,9 +198,29 @@ func main() {
 
 	// Create duplicate detector if needed
 	var detector *hashing.DuplicateDetector
-	if *suppressDuplicates || *duplicateFile != "" {
+	if *suppressDuplicates || *duplicateFile != "" || *outputDupsOnly || *checkFile != "" {
 		detector = hashing.NewDuplicateDetector(false)
 		cfg.SuppressDuplicates = *suppressDuplicates
+		cfg.SuppressOriginals = *outputDupsOnly
+	}
+
+	// Load check file for duplicate detection
+	if *checkFile != "" && detector != nil {
+		file, err := os.Open(*checkFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening check file %s: %v\n", *checkFile, err)
+			os.Exit(1)
+		}
+		checkGames := processInput(file, *checkFile, cfg)
+		file.Close()
+		// Add all games from checkfile to detector
+		for _, game := range checkGames {
+			board := replayGame(game)
+			detector.CheckAndAdd(game, board)
+		}
+		if cfg.Verbosity > 0 {
+			fmt.Fprintf(cfg.LogFile, "Loaded %d games from check file\n", len(checkGames))
+		}
 	}
 
 	// Load ECO file if specified
@@ -125,13 +232,15 @@ func main() {
 			os.Exit(1)
 		}
 		if cfg.Verbosity > 0 {
-			fmt.Fprintf(os.Stderr, "Loaded %d ECO entries\n", ecoClassifier.EntriesLoaded())
+			fmt.Fprintf(cfg.LogFile, "Loaded %d ECO entries\n", ecoClassifier.EntriesLoaded())
 		}
 		cfg.AddECO = true
 	}
 
 	// Set up game filter
 	gameFilter := matching.NewGameFilter()
+	gameFilter.SetUseSoundex(*useSoundex)
+	gameFilter.SetSubstringMatch(*tagSubstring)
 
 	// Load tag criteria file if specified
 	if *tagFile != "" {
@@ -164,6 +273,34 @@ func main() {
 		}
 	}
 
+	// Load variation file if specified
+	var variationMatcher *matching.VariationMatcher
+	if *variationFile != "" {
+		variationMatcher = matching.NewVariationMatcher()
+		if err := variationMatcher.LoadFromFile(*variationFile); err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading variation file %s: %v\n", *variationFile, err)
+			os.Exit(1)
+		}
+	}
+	if *positionFile != "" {
+		if variationMatcher == nil {
+			variationMatcher = matching.NewVariationMatcher()
+		}
+		if err := variationMatcher.LoadPositionalFromFile(*positionFile); err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading position file %s: %v\n", *positionFile, err)
+			os.Exit(1)
+		}
+	}
+
+	// Parse material match criteria
+	var materialMatcher *matching.MaterialMatcher
+	if *materialMatch != "" {
+		materialMatcher = matching.NewMaterialMatcher(*materialMatch, false)
+	}
+	if *materialMatchExact != "" {
+		materialMatcher = matching.NewMaterialMatcher(*materialMatchExact, true)
+	}
+
 	// Parse CQL query if specified (from file or command line)
 	var cqlNode cql.Node
 	cqlQueryStr := *cqlQuery
@@ -184,18 +321,45 @@ func main() {
 		}
 	}
 
+	// Set up output splitting
+	var splitWriter *SplitWriter
+	if *splitGames > 0 {
+		base := "output"
+		if *outputFile != "" {
+			base = strings.TrimSuffix(*outputFile, filepath.Ext(*outputFile))
+		}
+		splitWriter = NewSplitWriter(base, *splitGames)
+		cfg.OutputFile = splitWriter
+	}
+
 	// Process input files or stdin
 	args := flag.Args()
 	var totalGames, outputGames, duplicates int
+
+	// Create processing context
+	ctx := &ProcessingContext{
+		cfg:              cfg,
+		detector:         detector,
+		ecoClassifier:    ecoClassifier,
+		gameFilter:       gameFilter,
+		cqlNode:          cqlNode,
+		variationMatcher: variationMatcher,
+		materialMatcher:  materialMatcher,
+	}
 
 	if len(args) == 0 {
 		// Read from stdin
 		games := processInput(os.Stdin, "stdin", cfg)
 		totalGames = len(games)
-		outputGames, duplicates = outputGamesWithProcessing(games, cfg, detector, ecoClassifier, gameFilter, cqlNode)
+		outputGames, duplicates = outputGamesWithProcessing(games, ctx)
 	} else {
 		// Process each input file
 		for _, filename := range args {
+			// Check if we should stop
+			if *stopAfter > 0 && matchedCount >= *stopAfter {
+				break
+			}
+
 			file, err := os.Open(filename)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error opening file %s: %v\n", filename, err)
@@ -204,7 +368,7 @@ func main() {
 
 			games := processInput(file, filename, cfg)
 			totalGames += len(games)
-			out, dup := outputGamesWithProcessing(games, cfg, detector, ecoClassifier, gameFilter, cqlNode)
+			out, dup := outputGamesWithProcessing(games, ctx)
 			outputGames += out
 			duplicates += dup
 
@@ -212,12 +376,22 @@ func main() {
 		}
 	}
 
+	// Close split writer if used
+	if splitWriter != nil {
+		splitWriter.Close()
+	}
+
+	// Close non-match file
+	if nonMatchFile != nil {
+		nonMatchFile.Close()
+	}
+
 	// Report statistics
-	if cfg.Verbosity > 0 && !*quiet {
+	if cfg.Verbosity > 0 && !*quiet && !*reportOnly {
 		if detector != nil {
 			fmt.Fprintf(os.Stderr, "%d game(s) output, %d duplicate(s) out of %d.\n", outputGames, duplicates, totalGames)
 		} else {
-			fmt.Fprintf(os.Stderr, "%d game(s) matched out of %d.\n", totalGames, totalGames)
+			fmt.Fprintf(os.Stderr, "%d game(s) matched out of %d.\n", outputGames, totalGames)
 		}
 	}
 }
@@ -233,6 +407,67 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "  halg   Hyphenated long algebraic (e2-e4)\n")
 	fmt.Fprintf(os.Stderr, "  elalg  Enhanced long algebraic (Ng1f3)\n")
 	fmt.Fprintf(os.Stderr, "  uci    UCI format\n")
+	fmt.Fprintf(os.Stderr, "  epd    Extended Position Description\n")
+	fmt.Fprintf(os.Stderr, "  fen    FEN sequence\n")
+}
+
+// ProcessingContext holds all processing state
+type ProcessingContext struct {
+	cfg              *config.Config
+	detector         *hashing.DuplicateDetector
+	ecoClassifier    *eco.ECOClassifier
+	gameFilter       *matching.GameFilter
+	cqlNode          cql.Node
+	variationMatcher *matching.VariationMatcher
+	materialMatcher  *matching.MaterialMatcher
+}
+
+// SplitWriter handles writing to multiple output files
+type SplitWriter struct {
+	baseName    string
+	gamesPerFile int
+	currentFile *os.File
+	fileNumber  int
+	gameCount   int
+}
+
+// NewSplitWriter creates a new split writer
+func NewSplitWriter(baseName string, gamesPerFile int) *SplitWriter {
+	return &SplitWriter{
+		baseName:    baseName,
+		gamesPerFile: gamesPerFile,
+		fileNumber:  1,
+	}
+}
+
+// Write implements io.Writer
+func (sw *SplitWriter) Write(p []byte) (n int, err error) {
+	if sw.currentFile == nil || sw.gameCount >= sw.gamesPerFile {
+		if sw.currentFile != nil {
+			sw.currentFile.Close()
+			sw.fileNumber++
+		}
+		filename := fmt.Sprintf("%s_%d.pgn", sw.baseName, sw.fileNumber)
+		sw.currentFile, err = os.Create(filename)
+		if err != nil {
+			return 0, err
+		}
+		sw.gameCount = 0
+	}
+	return sw.currentFile.Write(p)
+}
+
+// IncrementGameCount should be called after each game is written
+func (sw *SplitWriter) IncrementGameCount() {
+	sw.gameCount++
+}
+
+// Close closes the current file
+func (sw *SplitWriter) Close() error {
+	if sw.currentFile != nil {
+		return sw.currentFile.Close()
+	}
+	return nil
 }
 
 func applyFlags(cfg *config.Config) {
@@ -263,6 +498,10 @@ func applyFlags(cfg *config.Config) {
 		cfg.OutputFormat = config.ELALG
 	case "uci":
 		cfg.OutputFormat = config.UCI
+	case "epd":
+		cfg.OutputFormat = config.EPD
+	case "fen":
+		cfg.OutputFormat = config.FEN
 	default:
 		cfg.OutputFormat = config.SAN
 	}
@@ -274,6 +513,40 @@ func applyFlags(cfg *config.Config) {
 
 	// JSON output
 	cfg.JSONFormat = *jsonOutput
+
+	// Ply/move bounds
+	if *minPly > 0 || *maxPly > 0 || *minMoves > 0 || *maxMoves > 0 {
+		cfg.CheckMoveBounds = true
+		if *minMoves > 0 {
+			cfg.LowerMoveBound = uint(*minMoves)
+		}
+		if *maxMoves > 0 {
+			cfg.UpperMoveBound = uint(*maxMoves)
+		}
+	}
+
+	// Annotations
+	cfg.OutputPlycount = *addPlyCount
+	cfg.AddFENComments = *addFENComments
+	cfg.AddHashcodeComments = *addHashComments
+	cfg.AddHashcodeTag = *addHashcodeTag
+
+	// Tag fixing
+	cfg.FixResultTags = *fixResultTags
+	cfg.FixTagStrings = *fixTagStrings
+
+	// Game feature matching
+	cfg.MatchOnlyCheckmate = *checkmateFilter
+	cfg.MatchOnlyStalemate = *stalemateFilter
+	cfg.CheckForFiftyMoveRule = *fiftyMoveFilter
+	cfg.CheckForRepetition = *repetitionFilter
+	cfg.MatchUnderpromotion = *underpromotionFilter
+
+	// Soundex
+	cfg.UseSoundex = *useSoundex
+
+	// Report only mode
+	cfg.CheckOnly = *reportOnly
 }
 
 func processInput(r io.Reader, name string, cfg *config.Config) []*chess.Game {
@@ -290,7 +563,13 @@ func processInput(r io.Reader, name string, cfg *config.Config) []*chess.Game {
 
 // outputGamesWithProcessing outputs games with optional filtering, ECO classification, and duplicate detection.
 // Returns the number of games output and the number of duplicates found.
-func outputGamesWithProcessing(games []*chess.Game, cfg *config.Config, detector *hashing.DuplicateDetector, ecoClassifier *eco.ECOClassifier, gameFilter *matching.GameFilter, cqlNode cql.Node) (int, int) {
+func outputGamesWithProcessing(games []*chess.Game, ctx *ProcessingContext) (int, int) {
+	cfg := ctx.cfg
+	detector := ctx.detector
+	ecoClassifier := ctx.ecoClassifier
+	gameFilter := ctx.gameFilter
+	cqlNode := ctx.cqlNode
+
 	outputCount := 0
 	duplicateCount := 0
 
@@ -298,84 +577,215 @@ func outputGamesWithProcessing(games []*chess.Game, cfg *config.Config, detector
 	var jsonGames []*chess.Game
 
 	for _, game := range games {
+		// Check if we should stop
+		if *stopAfter > 0 && matchedCount >= *stopAfter {
+			break
+		}
+
 		// Add ECO tags if classifier is available
 		if ecoClassifier != nil {
 			ecoClassifier.AddECOTags(game)
 		}
 
 		// Check filter criteria
+		matched := true
 		if gameFilter != nil && gameFilter.HasCriteria() {
-			if !gameFilter.MatchGame(game) {
-				continue // Skip non-matching games
-			}
+			matched = gameFilter.MatchGame(game)
 		}
 
 		// Check CQL filter - evaluate against every position in the game
-		if cqlNode != nil {
-			if !matchesCQL(game, cqlNode) {
-				continue // Skip games that don't match CQL
-			}
+		if matched && cqlNode != nil {
+			matched = matchesCQL(game, cqlNode)
 		}
 
-		// Replay the game to get final position (needed for checkmate/stalemate and duplicate detection)
+		// Check variation matcher
+		if matched && ctx.variationMatcher != nil {
+			matched = ctx.variationMatcher.MatchGame(game)
+		}
+
+		// Check material matcher
+		if matched && ctx.materialMatcher != nil {
+			matched = ctx.materialMatcher.MatchGame(game)
+		}
+
+		// Calculate ply count for bounds checking
+		plyCount := countPlies(game)
+
+		// Check ply bounds
+		if matched && *minPly > 0 && plyCount < *minPly {
+			matched = false
+		}
+		if matched && *maxPly > 0 && plyCount > *maxPly {
+			matched = false
+		}
+
+		// Check move bounds (moves = plies / 2, rounded up)
+		moveCount := (plyCount + 1) / 2
+		if matched && *minMoves > 0 && moveCount < *minMoves {
+			matched = false
+		}
+		if matched && *maxMoves > 0 && moveCount > *maxMoves {
+			matched = false
+		}
+
+		// Replay the game to get final position and game info
 		var board *chess.Board
-		if *checkmateFilter || *stalemateFilter || detector != nil {
-			board = replayGame(game)
+		var gameInfo *GameAnalysis
+		needsReplay := *checkmateFilter || *stalemateFilter || detector != nil ||
+			*fiftyMoveFilter || *repetitionFilter || *underpromotionFilter ||
+			*higherRatedWinner || *lowerRatedWinner || cfg.AddFENComments || cfg.AddHashcodeComments ||
+			cfg.AddHashcodeTag
+
+		if needsReplay {
+			board, gameInfo = analyzeGame(game)
 		}
 
 		// Check checkmate filter
-		if *checkmateFilter {
+		if matched && *checkmateFilter {
 			if !engine.IsCheckmate(board) {
-				continue // Skip non-checkmate games
+				matched = false
 			}
 		}
 
 		// Check stalemate filter
-		if *stalemateFilter {
+		if matched && *stalemateFilter {
 			if !engine.IsStalemate(board) {
-				continue // Skip non-stalemate games
+				matched = false
 			}
 		}
 
-		// If no duplicate detection, just output
-		if detector == nil {
-			if cfg.JSONFormat {
-				jsonGames = append(jsonGames, game)
-			} else {
-				output.OutputGame(game, cfg)
+		// Check fifty-move rule filter
+		if matched && *fiftyMoveFilter {
+			if !gameInfo.HasFiftyMoveRule {
+				matched = false
 			}
+		}
+
+		// Check repetition filter
+		if matched && *repetitionFilter {
+			if !gameInfo.HasRepetition {
+				matched = false
+			}
+		}
+
+		// Check underpromotion filter
+		if matched && *underpromotionFilter {
+			if !gameInfo.HasUnderpromotion {
+				matched = false
+			}
+		}
+
+		// Check commented filter
+		if matched && *commentedFilter {
+			if !hasComments(game) {
+				matched = false
+			}
+		}
+
+		// Check rating-based winner filters
+		if matched && (*higherRatedWinner || *lowerRatedWinner) {
+			whiteElo := parseElo(game.Tags["WhiteElo"])
+			blackElo := parseElo(game.Tags["BlackElo"])
+			result := game.Tags["Result"]
+
+			if whiteElo > 0 && blackElo > 0 {
+				if *higherRatedWinner {
+					higherWon := (whiteElo > blackElo && result == "1-0") ||
+						(blackElo > whiteElo && result == "0-1")
+					if !higherWon {
+						matched = false
+					}
+				}
+				if *lowerRatedWinner {
+					lowerWon := (whiteElo < blackElo && result == "1-0") ||
+						(blackElo < whiteElo && result == "0-1")
+					if !lowerWon {
+						matched = false
+					}
+				}
+			} else {
+				matched = false // No rating info available
+			}
+		}
+
+		// Handle negated matching
+		if *negateMatch {
+			matched = !matched
+		}
+
+		// If not matched, skip or output to non-matching file
+		if !matched {
+			if cfg.NonMatchingFile != nil {
+				originalOutput := cfg.OutputFile
+				cfg.OutputFile = cfg.NonMatchingFile
+				output.OutputGame(game, cfg)
+				cfg.OutputFile = originalOutput
+			}
+			continue
+		}
+
+		// Report-only mode - don't output games
+		if *reportOnly {
+			matchedCount++
 			outputCount++
 			continue
 		}
 
-		// board is already replayed above
+		// Add plycount tag if requested
+		if cfg.OutputPlycount {
+			game.Tags["PlyCount"] = strconv.Itoa(plyCount)
+		}
 
-		// Check for duplicate
-		isDuplicate := detector.CheckAndAdd(game, board)
+		// Add hashcode tag if requested
+		if cfg.AddHashcodeTag && board != nil {
+			hash := hashing.GenerateZobristHash(board)
+			game.Tags["HashCode"] = fmt.Sprintf("%016x", hash)
+		}
 
-		if isDuplicate {
-			duplicateCount++
-			// Output to duplicate file if configured
-			if cfg.DuplicateFile != nil {
-				originalOutput := cfg.OutputFile
-				cfg.OutputFile = cfg.DuplicateFile
-				if cfg.JSONFormat {
-					output.OutputGameJSON(game, cfg)
-				} else {
-					output.OutputGame(game, cfg)
+		// Handle duplicate detection
+		if detector != nil {
+			if board == nil {
+				board = replayGame(game)
+			}
+
+			isDuplicate := detector.CheckAndAdd(game, board)
+
+			if isDuplicate {
+				duplicateCount++
+				// Output to duplicate file if configured
+				if cfg.DuplicateFile != nil {
+					originalOutput := cfg.OutputFile
+					cfg.OutputFile = cfg.DuplicateFile
+					if cfg.JSONFormat {
+						output.OutputGameJSON(game, cfg)
+					} else {
+						output.OutputGame(game, cfg)
+					}
+					cfg.OutputFile = originalOutput
 				}
-				cfg.OutputFile = originalOutput
+				// If outputting only duplicates
+				if cfg.SuppressOriginals {
+					outputGameWithAnnotations(game, cfg, gameInfo, &jsonGames)
+					matchedCount++
+					outputCount++
+				}
+			} else {
+				// Not a duplicate - output normally unless suppressing duplicates
+				if !cfg.SuppressDuplicates {
+					outputGameWithAnnotations(game, cfg, gameInfo, &jsonGames)
+					matchedCount++
+					outputCount++
+				} else if !cfg.SuppressOriginals {
+					outputGameWithAnnotations(game, cfg, gameInfo, &jsonGames)
+					matchedCount++
+					outputCount++
+				}
 			}
 		} else {
-			// Not a duplicate - output normally
-			if !cfg.SuppressDuplicates || !isDuplicate {
-				if cfg.JSONFormat {
-					jsonGames = append(jsonGames, game)
-				} else {
-					output.OutputGame(game, cfg)
-				}
-				outputCount++
-			}
+			// No duplicate detection
+			outputGameWithAnnotations(game, cfg, gameInfo, &jsonGames)
+			matchedCount++
+			outputCount++
 		}
 	}
 
@@ -385,6 +795,115 @@ func outputGamesWithProcessing(games []*chess.Game, cfg *config.Config, detector
 	}
 
 	return outputCount, duplicateCount
+}
+
+// GameAnalysis holds analysis results from replaying a game
+type GameAnalysis struct {
+	FinalBoard        *chess.Board
+	HasFiftyMoveRule  bool
+	HasRepetition     bool
+	HasUnderpromotion bool
+	Positions         []uint64 // Zobrist hashes for repetition detection
+}
+
+// analyzeGame replays a game and analyzes it for various features
+func analyzeGame(game *chess.Game) (*chess.Board, *GameAnalysis) {
+	var board *chess.Board
+	var err error
+
+	// Check if game has a custom starting position (FEN tag)
+	if fen, ok := game.Tags["FEN"]; ok {
+		board, err = engine.NewBoardFromFEN(fen)
+		if err != nil {
+			board, _ = engine.NewBoardFromFEN(engine.InitialFEN)
+		}
+	} else {
+		board, _ = engine.NewBoardFromFEN(engine.InitialFEN)
+	}
+
+	analysis := &GameAnalysis{
+		Positions: make([]uint64, 0),
+	}
+
+	// Track initial position
+	posHash := hashing.GenerateZobristHash(board)
+	analysis.Positions = append(analysis.Positions, posHash)
+	positionCount := make(map[uint64]int)
+	positionCount[posHash] = 1
+
+	// Apply all moves
+	for move := game.Moves; move != nil; move = move.Next {
+		if !engine.ApplyMove(board, move) {
+			break
+		}
+
+		// Check for fifty-move rule
+		if board.HalfmoveClock >= 100 {
+			analysis.HasFiftyMoveRule = true
+		}
+
+		// Check for underpromotion
+		if move.PromotedPiece != chess.Empty && move.PromotedPiece != chess.Queen {
+			analysis.HasUnderpromotion = true
+		}
+
+		// Track position for repetition
+		posHash = hashing.GenerateZobristHash(board)
+		analysis.Positions = append(analysis.Positions, posHash)
+		positionCount[posHash]++
+		if positionCount[posHash] >= 3 {
+			analysis.HasRepetition = true
+		}
+	}
+
+	analysis.FinalBoard = board
+	return board, analysis
+}
+
+// outputGameWithAnnotations outputs a game with optional annotations
+func outputGameWithAnnotations(game *chess.Game, cfg *config.Config, gameInfo *GameAnalysis, jsonGames *[]*chess.Game) {
+	// Handle split writer
+	if sw, ok := cfg.OutputFile.(*SplitWriter); ok {
+		defer sw.IncrementGameCount()
+	}
+
+	if cfg.JSONFormat {
+		*jsonGames = append(*jsonGames, game)
+	} else {
+		// TODO: Add FEN comments and hash comments if requested
+		output.OutputGame(game, cfg)
+	}
+}
+
+// countPlies counts the number of half-moves in a game
+func countPlies(game *chess.Game) int {
+	count := 0
+	for move := game.Moves; move != nil; move = move.Next {
+		count++
+	}
+	return count
+}
+
+// hasComments checks if a game has any comments
+func hasComments(game *chess.Game) bool {
+	for move := game.Moves; move != nil; move = move.Next {
+		if move.HasComments() {
+			return true
+		}
+	}
+	return false
+}
+
+// parseElo parses an Elo rating string to int
+func parseElo(s string) int {
+	if s == "" || s == "-" || s == "?" {
+		return 0
+	}
+	elo, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return elo
 }
 
 // matchesCQL checks if any position in the game matches the CQL query.
