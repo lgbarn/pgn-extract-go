@@ -1,0 +1,29 @@
+[Event "Test Game - Sicilian"]
+[Site "Test"]
+[Date "2024.01.01"]
+[Round "1"]
+[White "Player A"]
+[Black "Player B"]
+[Result "1-0"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 1-0
+
+[Event "Test Game - Queen's Gambit"]
+[Site "Test"]
+[Date "2024.01.02"]
+[Round "2"]
+[White "Player C"]
+[Black "Player D"]
+[Result "0-1"]
+
+1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 5. e3 0-1
+
+[Event "Test Game - Italian Game"]
+[Site "Test"]
+[Date "2024.01.03"]
+[Round "3"]
+[White "Player E"]
+[Black "Player F"]
+[Result "1/2-1/2"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 1/2-1/2
