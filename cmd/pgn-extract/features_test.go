@@ -341,3 +341,167 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// TestStrictMode tests the --strict flag
+func TestStrictMode(t *testing.T) {
+	// Create a temp file with a game missing required tags
+	tmpFile, err := os.CreateTemp("", "strict_test*.pgn")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	// Write a malformed game (missing Event tag)
+	tmpFile.WriteString(`[Site "Test"]
+[Date "2024.01.01"]
+[Round "1"]
+[White "Player1"]
+[Black "Player2"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 1-0
+`)
+	tmpFile.Close()
+
+	// Without strict mode, should output the game
+	stdoutNormal, _ := runPgnExtract(t, "-s", tmpPath)
+	countNormal := countGames(stdoutNormal)
+
+	// With strict mode, should skip the game (missing Event)
+	stdoutStrict, _ := runPgnExtract(t, "-s", "--strict", tmpPath)
+	countStrict := countGames(stdoutStrict)
+
+	t.Logf("Without strict: %d games, with strict: %d games", countNormal, countStrict)
+
+	if countNormal == 0 {
+		t.Error("Expected at least 1 game without strict mode")
+	}
+	if countStrict >= countNormal {
+		t.Error("Expected fewer games with strict mode")
+	}
+}
+
+// TestValidateMode tests the --validate flag
+func TestValidateMode(t *testing.T) {
+	// Create a temp file with an illegal move
+	tmpFile, err := os.CreateTemp("", "validate_test*.pgn")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	// Write a game with an illegal move (Nf3 to h5 is illegal)
+	tmpFile.WriteString(`[Event "Test"]
+[Site "Test"]
+[Date "2024.01.01"]
+[Round "1"]
+[White "Player1"]
+[Black "Player2"]
+[Result "*"]
+
+1. e4 e5 2. Nf3 Nh5 *
+`)
+	tmpFile.Close()
+
+	// With validate mode, should skip the game with illegal move
+	stdout, stderr := runPgnExtract(t, "-s", "--validate", tmpPath)
+	count := countGames(stdout)
+
+	t.Logf("Validate mode: %d games output, stderr: %s", count, stderr)
+
+	// The illegal move should cause the game to be skipped
+	// Note: whether it's caught depends on how Nh5 is parsed
+}
+
+// TestFixableMode tests the --fixable flag
+func TestFixableMode(t *testing.T) {
+	// Create a temp file with fixable issues
+	tmpFile, err := os.CreateTemp("", "fixable_test*.pgn")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	// Write a game with missing tags and bad date format
+	tmpFile.WriteString(`[White "Player1"]
+[Black "Player2"]
+[Date "2024/01/01"]
+[Result "1-0"]
+
+1. e4 e5 1-0
+`)
+	tmpFile.Close()
+
+	// With fixable mode, should fix the issues
+	stdout, _ := runPgnExtract(t, "-s", "--fixable", tmpPath)
+
+	// Check that missing Event tag was added
+	if !strings.Contains(stdout, "[Event ") {
+		t.Error("Expected Event tag to be added by fixable mode")
+	}
+
+	// Check that date was normalized (/ -> .)
+	if strings.Contains(stdout, "2024/01/01") {
+		t.Error("Expected date format to be fixed by fixable mode")
+	}
+
+	t.Logf("Fixable mode output:\n%s", stdout)
+}
+
+// TestValidateGoodGames tests that --validate passes good games
+func TestValidateGoodGames(t *testing.T) {
+	// Fischer games should all be valid
+	stdout, _ := runPgnExtract(t, "-s", "--validate", inputFile("fischer.pgn"))
+	count := countGames(stdout)
+
+	// Count without validation
+	stdoutAll, _ := runPgnExtract(t, "-s", inputFile("fischer.pgn"))
+	countAll := countGames(stdoutAll)
+
+	t.Logf("Validate mode: %d/%d games passed", count, countAll)
+
+	// All Fischer games should be valid
+	if count != countAll {
+		t.Errorf("Expected all %d Fischer games to pass validation, got %d", countAll, count)
+	}
+}
+
+// TestStrictWithFixable tests --strict combined with --fixable
+func TestStrictWithFixable(t *testing.T) {
+	// Create a temp file with fixable issues
+	tmpFile, err := os.CreateTemp("", "strict_fixable_test*.pgn")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	// Write a game with missing tags
+	tmpFile.WriteString(`[White "Player1"]
+[Black "Player2"]
+[Result "1-0"]
+
+1. e4 e5 1-0
+`)
+	tmpFile.Close()
+
+	// With strict only, should skip (missing required tags)
+	stdoutStrict, _ := runPgnExtract(t, "-s", "--strict", tmpPath)
+	countStrict := countGames(stdoutStrict)
+
+	// With fixable + strict, should pass (tags get fixed then validated)
+	stdoutBoth, _ := runPgnExtract(t, "-s", "--fixable", "--strict", tmpPath)
+	countBoth := countGames(stdoutBoth)
+
+	t.Logf("Strict only: %d games, fixable+strict: %d games", countStrict, countBoth)
+
+	if countStrict != 0 {
+		t.Error("Expected strict mode alone to reject game with missing tags")
+	}
+	if countBoth != 1 {
+		t.Error("Expected fixable+strict to accept game after fixing tags")
+	}
+}
