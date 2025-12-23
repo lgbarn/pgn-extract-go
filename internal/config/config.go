@@ -80,6 +80,7 @@ type Config struct {
 	KeepNAGs             bool
 	KeepComments         bool
 	KeepVariations       bool
+	StripClockAnnotations bool
 	TagOutputFormat      TagOutputForm
 	MatchPermutations    bool
 	PositionalVariations bool

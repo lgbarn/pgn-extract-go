@@ -4,12 +4,21 @@ package output
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
 	"github.com/lgbarn/pgn-extract-go/internal/config"
 	"github.com/lgbarn/pgn-extract-go/internal/engine"
 )
+
+// clockAnnotationRegex matches clock annotations like [%clk H:MM:SS] or [%clk H:MM:SS.d]
+var clockAnnotationRegex = regexp.MustCompile(`\[%clk\s+\d+:\d{2}:\d{2}(?:\.\d+)?\]`)
+
+// stripClockAnnotations removes clock annotations from comment text.
+func stripClockAnnotations(text string) string {
+	return strings.TrimSpace(clockAnnotationRegex.ReplaceAllString(text, ""))
+}
 
 // OutputWriter handles formatted output with line length control.
 type OutputWriter struct {
@@ -162,7 +171,13 @@ func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
 		// Output comments
 		if cfg.KeepComments && len(move.Comments) > 0 {
 			for _, comment := range move.Comments {
-				ow.Write("{" + comment.Text + "}")
+				text := comment.Text
+				if cfg.StripClockAnnotations {
+					text = stripClockAnnotations(text)
+				}
+				if text != "" {
+					ow.Write("{" + text + "}")
+				}
 			}
 		}
 
@@ -210,7 +225,13 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 	// Prefix comments
 	if cfg.KeepComments {
 		for _, comment := range variation.PrefixComment {
-			ow.WriteNoSpace("{" + comment.Text + "}")
+			text := comment.Text
+			if cfg.StripClockAnnotations {
+				text = stripClockAnnotations(text)
+			}
+			if text != "" {
+				ow.WriteNoSpace("{" + text + "}")
+			}
 		}
 	}
 
@@ -248,7 +269,13 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 		// Output comments
 		if cfg.KeepComments && len(move.Comments) > 0 {
 			for _, comment := range move.Comments {
-				ow.Write("{" + comment.Text + "}")
+				text := comment.Text
+				if cfg.StripClockAnnotations {
+					text = stripClockAnnotations(text)
+				}
+				if text != "" {
+					ow.Write("{" + text + "}")
+				}
 			}
 		}
 
@@ -284,7 +311,13 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 	// Suffix comments
 	if cfg.KeepComments {
 		for _, comment := range variation.SuffixComment {
-			ow.Write("{" + comment.Text + "}")
+			text := comment.Text
+			if cfg.StripClockAnnotations {
+				text = stripClockAnnotations(text)
+			}
+			if text != "" {
+				ow.Write("{" + text + "}")
+			}
 		}
 	}
 }

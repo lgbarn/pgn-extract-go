@@ -7,8 +7,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
 	"github.com/lgbarn/pgn-extract-go/internal/config"
@@ -19,6 +21,7 @@ import (
 	"github.com/lgbarn/pgn-extract-go/internal/matching"
 	"github.com/lgbarn/pgn-extract-go/internal/output"
 	"github.com/lgbarn/pgn-extract-go/internal/parser"
+	"github.com/lgbarn/pgn-extract-go/internal/worker"
 )
 
 var (
@@ -38,6 +41,7 @@ var (
 	noNAGs        = flag.Bool("N", false, "Don't output NAGs")
 	noVariations  = flag.Bool("V", false, "Don't output variations")
 	noResults     = flag.Bool("noresults", false, "Don't output results")
+	noClocks      = flag.Bool("noclocks", false, "Strip clock annotations from comments")
 
 	// Duplicate detection
 	suppressDuplicates = flag.Bool("D", false, "Suppress duplicate games")
@@ -118,12 +122,15 @@ var (
 	quiet         = flag.Bool("s", false, "Silent mode (no game count)")
 	help          = flag.Bool("h", false, "Show help")
 	version       = flag.Bool("version", false, "Show version")
+
+	// Performance options
+	workers = flag.Int("workers", 0, "Number of worker threads (0 = auto-detect based on CPU cores)")
 )
 
 const programVersion = "0.1.0"
 
-// Global state for stopAfter
-var matchedCount int
+// Global state for stopAfter (atomic for thread safety)
+var matchedCount int64
 
 func main() {
 	flag.Usage = usage
@@ -361,7 +368,7 @@ func main() {
 		// Process each input file
 		for _, filename := range args {
 			// Check if we should stop
-			if *stopAfter > 0 && matchedCount >= *stopAfter {
+			if *stopAfter > 0 && atomic.LoadInt64(&matchedCount) >= int64(*stopAfter) {
 				break
 			}
 
@@ -489,6 +496,7 @@ func applyFlags(cfg *config.Config) {
 	cfg.KeepNAGs = !*noNAGs
 	cfg.KeepVariations = !*noVariations
 	cfg.KeepResults = !*noResults
+	cfg.StripClockAnnotations = *noClocks
 
 	// Line length
 	cfg.MaxLineLength = uint(*lineLength)
@@ -569,6 +577,21 @@ func processInput(r io.Reader, name string, cfg *config.Config) []*chess.Game {
 // outputGamesWithProcessing outputs games with optional filtering, ECO classification, and duplicate detection.
 // Returns the number of games output and the number of duplicates found.
 func outputGamesWithProcessing(games []*chess.Game, ctx *ProcessingContext) (int, int) {
+	numWorkers := *workers
+	if numWorkers <= 0 {
+		numWorkers = runtime.NumCPU()
+	}
+
+	// Use parallel processing for multiple workers and enough games
+	if numWorkers > 1 && len(games) > 2 {
+		return outputGamesParallel(games, ctx, numWorkers)
+	}
+
+	return outputGamesSequential(games, ctx)
+}
+
+// outputGamesSequential processes games sequentially (single-threaded).
+func outputGamesSequential(games []*chess.Game, ctx *ProcessingContext) (int, int) {
 	cfg := ctx.cfg
 	detector := ctx.detector
 	ecoClassifier := ctx.ecoClassifier
@@ -583,7 +606,7 @@ func outputGamesWithProcessing(games []*chess.Game, ctx *ProcessingContext) (int
 
 	for _, game := range games {
 		// Check if we should stop
-		if *stopAfter > 0 && matchedCount >= *stopAfter {
+		if *stopAfter > 0 && atomic.LoadInt64(&matchedCount) >= int64(*stopAfter) {
 			break
 		}
 
@@ -759,7 +782,7 @@ func outputGamesWithProcessing(games []*chess.Game, ctx *ProcessingContext) (int
 
 		// Report-only mode - don't output games
 		if *reportOnly {
-			matchedCount++
+			atomic.AddInt64(&matchedCount, 1)
 			outputCount++
 			continue
 		}
@@ -799,25 +822,25 @@ func outputGamesWithProcessing(games []*chess.Game, ctx *ProcessingContext) (int
 				// If outputting only duplicates
 				if cfg.SuppressOriginals {
 					outputGameWithAnnotations(game, cfg, gameInfo, &jsonGames)
-					matchedCount++
+					atomic.AddInt64(&matchedCount, 1)
 					outputCount++
 				}
 			} else {
 				// Not a duplicate - output normally unless suppressing duplicates
 				if !cfg.SuppressDuplicates {
 					outputGameWithAnnotations(game, cfg, gameInfo, &jsonGames)
-					matchedCount++
+					atomic.AddInt64(&matchedCount, 1)
 					outputCount++
 				} else if !cfg.SuppressOriginals {
 					outputGameWithAnnotations(game, cfg, gameInfo, &jsonGames)
-					matchedCount++
+					atomic.AddInt64(&matchedCount, 1)
 					outputCount++
 				}
 			}
 		} else {
 			// No duplicate detection
 			outputGameWithAnnotations(game, cfg, gameInfo, &jsonGames)
-			matchedCount++
+			atomic.AddInt64(&matchedCount, 1)
 			outputCount++
 		}
 	}
@@ -828,6 +851,310 @@ func outputGamesWithProcessing(games []*chess.Game, ctx *ProcessingContext) (int
 	}
 
 	return outputCount, duplicateCount
+}
+
+// outputGamesParallel processes games using a worker pool for parallel execution.
+func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers int) (int, int) {
+	cfg := ctx.cfg
+	detector := ctx.detector // Use the shared detector directly (result collection is single-threaded)
+
+	outputCount := int64(0)
+	duplicateCount := int64(0)
+
+	// Create the processing function that will run in worker goroutines
+	processFunc := func(item worker.WorkItem) worker.ProcessResult {
+		return processGameWorker(item, ctx)
+	}
+
+	// Create and start pool
+	bufferSize := len(games)
+	if bufferSize > 100 {
+		bufferSize = 100
+	}
+	pool := worker.NewPool(numWorkers, bufferSize, processFunc)
+	pool.Start()
+
+	// Submit all games in a separate goroutine
+	go func() {
+		for i, game := range games {
+			// Check stopAfter before submitting
+			if *stopAfter > 0 && atomic.LoadInt64(&matchedCount) >= int64(*stopAfter) {
+				break
+			}
+			pool.Submit(worker.WorkItem{Game: game, Index: i})
+		}
+		pool.Close()
+	}()
+
+	// For JSON output, collect games first
+	var jsonGames []*chess.Game
+
+	// Collect results from the result channel (single goroutine - serializes output)
+	for result := range pool.Results() {
+		// Check stopAfter
+		if *stopAfter > 0 && atomic.LoadInt64(&matchedCount) >= int64(*stopAfter) {
+			pool.Stop()
+			continue // Drain remaining results
+		}
+
+		// Handle non-matching games
+		if !result.Matched {
+			if cfg.NonMatchingFile != nil {
+				originalOutput := cfg.OutputFile
+				cfg.OutputFile = cfg.NonMatchingFile
+				output.OutputGame(result.Game, cfg)
+				cfg.OutputFile = originalOutput
+			}
+			continue
+		}
+
+		// Report-only mode
+		if *reportOnly {
+			atomic.AddInt64(&matchedCount, 1)
+			atomic.AddInt64(&outputCount, 1)
+			continue
+		}
+
+		// Handle duplicate detection (single-threaded in result collection)
+		if detector != nil {
+			board := result.Board
+			if board == nil {
+				board = replayGame(result.Game)
+			}
+
+			isDuplicate := detector.CheckAndAdd(result.Game, board)
+
+			if isDuplicate {
+				atomic.AddInt64(&duplicateCount, 1)
+				// Output to duplicate file if configured
+				if cfg.DuplicateFile != nil {
+					originalOutput := cfg.OutputFile
+					cfg.OutputFile = cfg.DuplicateFile
+					if cfg.JSONFormat {
+						output.OutputGameJSON(result.Game, cfg)
+					} else {
+						output.OutputGame(result.Game, cfg)
+					}
+					cfg.OutputFile = originalOutput
+				}
+				// If outputting only duplicates
+				if cfg.SuppressOriginals {
+					gameInfo, _ := result.GameInfo.(*GameAnalysis)
+					outputGameWithAnnotations(result.Game, cfg, gameInfo, &jsonGames)
+					atomic.AddInt64(&matchedCount, 1)
+					atomic.AddInt64(&outputCount, 1)
+				}
+			} else {
+				// Not a duplicate - output normally unless suppressing duplicates
+				if !cfg.SuppressDuplicates {
+					gameInfo, _ := result.GameInfo.(*GameAnalysis)
+					outputGameWithAnnotations(result.Game, cfg, gameInfo, &jsonGames)
+					atomic.AddInt64(&matchedCount, 1)
+					atomic.AddInt64(&outputCount, 1)
+				} else if !cfg.SuppressOriginals {
+					gameInfo, _ := result.GameInfo.(*GameAnalysis)
+					outputGameWithAnnotations(result.Game, cfg, gameInfo, &jsonGames)
+					atomic.AddInt64(&matchedCount, 1)
+					atomic.AddInt64(&outputCount, 1)
+				}
+			}
+		} else {
+			// No duplicate detection
+			gameInfo, _ := result.GameInfo.(*GameAnalysis)
+			outputGameWithAnnotations(result.Game, cfg, gameInfo, &jsonGames)
+			atomic.AddInt64(&matchedCount, 1)
+			atomic.AddInt64(&outputCount, 1)
+		}
+	}
+
+	// Output JSON array if JSON mode
+	if cfg.JSONFormat && len(jsonGames) > 0 {
+		output.OutputGamesJSON(jsonGames, cfg, cfg.OutputFile)
+	}
+
+	return int(atomic.LoadInt64(&outputCount)), int(atomic.LoadInt64(&duplicateCount))
+}
+
+// processGameWorker processes a single game in a worker goroutine.
+// This does all the CPU-intensive work that can be safely parallelized.
+func processGameWorker(item worker.WorkItem, ctx *ProcessingContext) worker.ProcessResult {
+	game := item.Game
+	result := worker.ProcessResult{
+		Game:  game,
+		Index: item.Index,
+	}
+
+	// Apply fixes if requested (do this before validation)
+	if *fixableMode {
+		fixGame(game)
+	}
+
+	// Validation checks
+	if *strictMode || *validateMode {
+		validResult := validateGame(game)
+
+		// In strict mode, skip games with any parse errors
+		if *strictMode && len(validResult.ParseErrors) > 0 {
+			result.Matched = false
+			return result
+		}
+
+		// In validate mode, skip games with illegal moves
+		if *validateMode && !validResult.Valid {
+			result.Matched = false
+			return result
+		}
+	}
+
+	// Add ECO tags if classifier is available
+	if ctx.ecoClassifier != nil {
+		ctx.ecoClassifier.AddECOTags(game)
+	}
+
+	// Check filter criteria
+	matched := true
+	if ctx.gameFilter != nil && ctx.gameFilter.HasCriteria() {
+		matched = ctx.gameFilter.MatchGame(game)
+	}
+
+	// Check CQL filter
+	if matched && ctx.cqlNode != nil {
+		matched = matchesCQL(game, ctx.cqlNode)
+	}
+
+	// Check variation matcher
+	if matched && ctx.variationMatcher != nil {
+		matched = ctx.variationMatcher.MatchGame(game)
+	}
+
+	// Check material matcher
+	if matched && ctx.materialMatcher != nil {
+		matched = ctx.materialMatcher.MatchGame(game)
+	}
+
+	// Calculate ply count for bounds checking
+	plyCount := countPlies(game)
+
+	// Check ply bounds
+	if matched && *minPly > 0 && plyCount < *minPly {
+		matched = false
+	}
+	if matched && *maxPly > 0 && plyCount > *maxPly {
+		matched = false
+	}
+
+	// Check move bounds (moves = plies / 2, rounded up)
+	moveCount := (plyCount + 1) / 2
+	if matched && *minMoves > 0 && moveCount < *minMoves {
+		matched = false
+	}
+	if matched && *maxMoves > 0 && moveCount > *maxMoves {
+		matched = false
+	}
+
+	// Game analysis (creates its own board - thread-safe)
+	var board *chess.Board
+	var gameInfo *GameAnalysis
+	cfg := ctx.cfg
+	needsReplay := *checkmateFilter || *stalemateFilter || ctx.detector != nil ||
+		*fiftyMoveFilter || *repetitionFilter || *underpromotionFilter ||
+		*higherRatedWinner || *lowerRatedWinner || cfg.AddFENComments || cfg.AddHashcodeComments ||
+		cfg.AddHashcodeTag
+
+	if needsReplay {
+		board, gameInfo = analyzeGame(game)
+		result.Board = board
+		result.GameInfo = gameInfo
+	}
+
+	// Check checkmate filter
+	if matched && *checkmateFilter {
+		if !engine.IsCheckmate(board) {
+			matched = false
+		}
+	}
+
+	// Check stalemate filter
+	if matched && *stalemateFilter {
+		if !engine.IsStalemate(board) {
+			matched = false
+		}
+	}
+
+	// Check fifty-move rule filter
+	if matched && *fiftyMoveFilter {
+		if gameInfo == nil || !gameInfo.HasFiftyMoveRule {
+			matched = false
+		}
+	}
+
+	// Check repetition filter
+	if matched && *repetitionFilter {
+		if gameInfo == nil || !gameInfo.HasRepetition {
+			matched = false
+		}
+	}
+
+	// Check underpromotion filter
+	if matched && *underpromotionFilter {
+		if gameInfo == nil || !gameInfo.HasUnderpromotion {
+			matched = false
+		}
+	}
+
+	// Check commented filter
+	if matched && *commentedFilter {
+		if !hasComments(game) {
+			matched = false
+		}
+	}
+
+	// Check rating-based winner filters
+	if matched && (*higherRatedWinner || *lowerRatedWinner) {
+		whiteElo := parseElo(game.Tags["WhiteElo"])
+		blackElo := parseElo(game.Tags["BlackElo"])
+		gameResult := game.Tags["Result"]
+
+		if whiteElo > 0 && blackElo > 0 {
+			if *higherRatedWinner {
+				higherWon := (whiteElo > blackElo && gameResult == "1-0") ||
+					(blackElo > whiteElo && gameResult == "0-1")
+				if !higherWon {
+					matched = false
+				}
+			}
+			if *lowerRatedWinner {
+				lowerWon := (whiteElo < blackElo && gameResult == "1-0") ||
+					(blackElo < whiteElo && gameResult == "0-1")
+				if !lowerWon {
+					matched = false
+				}
+			}
+		} else {
+			matched = false // No rating info available
+		}
+	}
+
+	// Handle negated matching
+	if *negateMatch {
+		matched = !matched
+	}
+
+	// Add plycount tag if requested (and matched)
+	if matched && cfg.OutputPlycount {
+		game.Tags["PlyCount"] = strconv.Itoa(plyCount)
+	}
+
+	// Add hashcode tag if requested (and matched)
+	if matched && cfg.AddHashcodeTag && board != nil {
+		hash := hashing.GenerateZobristHash(board)
+		game.Tags["HashCode"] = fmt.Sprintf("%016x", hash)
+	}
+
+	result.Matched = matched
+	result.ShouldOutput = matched && !*reportOnly
+
+	return result
 }
 
 // GameAnalysis holds analysis results from replaying a game
