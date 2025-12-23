@@ -1,0 +1,17 @@
+# Binaries
+pgn-extract
+pgn-extract-go
+*.exe
+
+# Test binaries
+cmd/pgn-extract/pgn-extract-test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
