@@ -27,11 +27,12 @@ const (
 
 // TagCriterion represents a single tag matching criterion.
 type TagCriterion struct {
-	TagName  string
-	Value    string
-	Operator TagOperator
-	Regex    *regexp.Regexp // compiled regex for OpRegex
-	Soundex  string         // soundex value for OpSoundex
+	TagName    string
+	Value      string
+	Operator   TagOperator
+	Regex      *regexp.Regexp // compiled regex for OpRegex
+	Soundex    string         // soundex value for OpSoundex
+	LowerValue string         // pre-computed lowercase for OpContains
 }
 
 // TagMatcher provides tag-based game filtering.
@@ -84,6 +85,11 @@ func (tm *TagMatcher) AddCriterion(tagName, value string, op TagOperator) error 
 	// Calculate soundex if needed
 	if op == OpSoundex {
 		c.Soundex = Soundex(value)
+	}
+
+	// Pre-compute lowercase for contains matching
+	if op == OpContains {
+		c.LowerValue = strings.ToLower(value)
 	}
 
 	tm.criteria = append(tm.criteria, c)
@@ -209,7 +215,7 @@ func (tm *TagMatcher) matchValue(tagValue string, c *TagCriterion) bool {
 		return !strings.EqualFold(tagValue, c.Value)
 
 	case OpContains:
-		return strings.Contains(strings.ToLower(tagValue), strings.ToLower(c.Value))
+		return strings.Contains(strings.ToLower(tagValue), c.LowerValue)
 
 	case OpRegex:
 		if c.Regex == nil {

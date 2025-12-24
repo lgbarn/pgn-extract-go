@@ -372,6 +372,14 @@ Remove game results from the move text:
 pgn-extract-go --noresults games.pgn
 ```
 
+Strip clock annotations from comments:
+
+```bash
+pgn-extract-go --noclocks games.pgn
+```
+
+This removes `[%clk H:MM:SS]` annotations from comments while preserving other content like regular text comments and `[%eval]` annotations.
+
 ### Line Length
 
 Control the maximum line length in output (default is 80):
@@ -788,6 +796,7 @@ pgn-extract-go --fixable --validate -o verified.pgn dirty.pgn
 | `-N` | Don't output NAGs |
 | `-V` | Don't output variations |
 | `--noresults` | Don't output results in moves |
+| `--noclocks` | Strip clock annotations (`[%clk ...]`) from comments |
 | `--plycount` | Add PlyCount tag to games |
 | `--addhashcode` | Add HashCode tag to games |
 | `--fencomments` | Add FEN position as comment after each move |
@@ -883,6 +892,12 @@ pgn-extract-go --fixable --validate -o verified.pgn dirty.pgn
 |------|-------------|
 | `-e <file>` | ECO classification file (PGN format) |
 
+### Performance Options
+
+| Flag | Description |
+|------|-------------|
+| `--workers N` | Number of parallel worker threads (0 = auto-detect based on CPU cores, default: 0) |
+
 ### Other Options
 
 | Flag | Description |
@@ -909,6 +924,33 @@ Remove comments, variations, and duplicates:
 
 ```bash
 pgn-extract-go -C -V -D games.pgn > clean.pgn
+```
+
+### Remove Clock Annotations
+
+Clean up online games by removing clock annotations while keeping other comments:
+
+```bash
+# Remove only clock annotations
+pgn-extract-go --noclocks games.pgn
+
+# Clean lichess/chess.com games
+pgn-extract-go --noclocks -o clean.pgn lichess-games.pgn
+```
+
+### Process Large Databases
+
+Use parallel processing to speed up large database operations:
+
+```bash
+# Auto-detect CPU cores (default behavior)
+pgn-extract-go -D -o unique.pgn megabase.pgn
+
+# Explicitly use 8 workers
+pgn-extract-go --workers 8 -D -o unique.pgn megabase.pgn
+
+# Single-threaded for deterministic output order
+pgn-extract-go --workers 1 games.pgn
 ```
 
 ### Convert to UCI Format
@@ -1050,6 +1092,9 @@ pgn-extract-go -c existing.pgn new-games.pgn -o truly-new.pgn
 
 ### Performance
 
+- Games are processed in parallel using multiple CPU cores by default
+- Use `--workers N` to control parallelism (0 = auto-detect, which is the default)
+- Use `--workers 1` for single-threaded mode with deterministic output ordering
 - Process files in batches rather than one at a time when doing duplicate detection
 - Use `-s` (silent mode) when processing large files to avoid output overhead
 - CQL queries check every position, so complex queries on large databases may take time

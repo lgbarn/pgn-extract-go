@@ -123,6 +123,10 @@ func outputTags(game *chess.Game, cfg *config.Config, w io.Writer) {
 
 // escapeTagValue escapes special characters in tag values.
 func escapeTagValue(s string) string {
+	// Fast path: if no escaping needed, return original string
+	if !strings.ContainsAny(s, "\\\"") {
+		return s
+	}
 	s = strings.ReplaceAll(s, "\\", "\\\\")
 	s = strings.ReplaceAll(s, "\"", "\\\"")
 	return s
@@ -184,7 +188,9 @@ func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
 		// Output variations
 		if cfg.KeepVariations && len(move.Variations) > 0 {
 			for _, variation := range move.Variations {
-				outputVariation(variation, board.Copy(), cfg, ow)
+				savedState := board.SaveState()
+				outputVariation(variation, board, cfg, ow)
+				board.RestoreState(savedState)
 			}
 		}
 
@@ -282,7 +288,9 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 		// Nested variations
 		if cfg.KeepVariations && len(move.Variations) > 0 {
 			for _, v := range move.Variations {
-				outputVariation(v, board.Copy(), cfg, ow)
+				savedState := board.SaveState()
+				outputVariation(v, board, cfg, ow)
+				board.RestoreState(savedState)
 			}
 		}
 

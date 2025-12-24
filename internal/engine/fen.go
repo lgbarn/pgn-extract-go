@@ -275,3 +275,14 @@ func NewInitialBoard() *chess.Board {
 	board, _ := NewBoardFromFEN(InitialFEN)
 	return board
 }
+
+// NewBoardForGame creates a board for a game, using FEN tag if present.
+// Falls back to initial position if FEN is missing or invalid.
+func NewBoardForGame(game *chess.Game) *chess.Board {
+	if fen, ok := game.Tags["FEN"]; ok {
+		if board, err := NewBoardFromFEN(fen); err == nil {
+			return board
+		}
+	}
+	return NewInitialBoard()
+}

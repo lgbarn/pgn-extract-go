@@ -1,6 +1,6 @@
-# Binaries
-pgn-extract
-pgn-extract-go
+# Binaries (root directory only)
+/pgn-extract
+/pgn-extract-go
 *.exe
 
 # Test binaries

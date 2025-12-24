@@ -133,6 +133,73 @@ func (b *Board) Copy() *Board {
 	return newBoard
 }
 
+// BoardState captures all mutable board state for save/restore operations.
+// This is more efficient than Copy() when you need to temporarily modify
+// the board and then restore it (e.g., exploring variations).
+type BoardState struct {
+	Squares       [Hedge + BoardSize + Hedge][Hedge + BoardSize + Hedge]Piece
+	ToMove        Colour
+	MoveNumber    uint
+	WKingCastle   Col
+	WQueenCastle  Col
+	BKingCastle   Col
+	BQueenCastle  Col
+	WKingCol      Col
+	WKingRank     Rank
+	BKingCol      Col
+	BKingRank     Rank
+	EnPassant     bool
+	EPRank        Rank
+	EPCol         Col
+	WeakHashValue HashCode
+	Zobrist       uint64
+	HalfmoveClock uint
+}
+
+// SaveState captures the current board state for later restoration.
+func (b *Board) SaveState() BoardState {
+	return BoardState{
+		Squares:       b.Squares,
+		ToMove:        b.ToMove,
+		MoveNumber:    b.MoveNumber,
+		WKingCastle:   b.WKingCastle,
+		WQueenCastle:  b.WQueenCastle,
+		BKingCastle:   b.BKingCastle,
+		BQueenCastle:  b.BQueenCastle,
+		WKingCol:      b.WKingCol,
+		WKingRank:     b.WKingRank,
+		BKingCol:      b.BKingCol,
+		BKingRank:     b.BKingRank,
+		EnPassant:     b.EnPassant,
+		EPRank:        b.EPRank,
+		EPCol:         b.EPCol,
+		WeakHashValue: b.WeakHashValue,
+		Zobrist:       b.Zobrist,
+		HalfmoveClock: b.HalfmoveClock,
+	}
+}
+
+// RestoreState restores the board to a previously saved state.
+func (b *Board) RestoreState(s BoardState) {
+	b.Squares = s.Squares
+	b.ToMove = s.ToMove
+	b.MoveNumber = s.MoveNumber
+	b.WKingCastle = s.WKingCastle
+	b.WQueenCastle = s.WQueenCastle
+	b.BKingCastle = s.BKingCastle
+	b.BQueenCastle = s.BQueenCastle
+	b.WKingCol = s.WKingCol
+	b.WKingRank = s.WKingRank
+	b.BKingCol = s.BKingCol
+	b.BKingRank = s.BKingRank
+	b.EnPassant = s.EnPassant
+	b.EPRank = s.EPRank
+	b.EPCol = s.EPCol
+	b.WeakHashValue = s.WeakHashValue
+	b.Zobrist = s.Zobrist
+	b.HalfmoveClock = s.HalfmoveClock
+}
+
 // MovePair represents a source-destination square pair for move generation.
 type MovePair struct {
 	FromCol  Col

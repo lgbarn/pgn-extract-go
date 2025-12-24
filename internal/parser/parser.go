@@ -358,7 +358,8 @@ func (p *Parser) parseResult() string {
 
 // ParseAllGames parses all games from the input.
 func (p *Parser) ParseAllGames() ([]*chess.Game, error) {
-	var games []*chess.Game
+	// Pre-allocate with reasonable initial capacity to reduce reallocations
+	games := make([]*chess.Game, 0, 100)
 
 	for {
 		game, err := p.ParseGame()

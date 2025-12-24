@@ -23,6 +23,16 @@ func NewEvaluatorWithGame(board *chess.Board, game *chess.Game) *Evaluator {
 	return &Evaluator{board: board, game: game}
 }
 
+// SetBoard updates the board for this evaluator, allowing reuse across positions.
+func (e *Evaluator) SetBoard(board *chess.Board) {
+	e.board = board
+}
+
+// SetGame updates the game context for this evaluator.
+func (e *Evaluator) SetGame(game *chess.Game) {
+	e.game = game
+}
+
 // Evaluate evaluates the CQL expression and returns true if it matches.
 func (e *Evaluator) Evaluate(node Node) bool {
 	switch n := node.(type) {

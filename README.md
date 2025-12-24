@@ -145,6 +145,7 @@ pgn-extract --validate games.pgn
 | `-N` | Don't output NAGs (Numeric Annotation Glyphs) |
 | `-V` | Don't output variations |
 | `--noresults` | Don't output results |
+| `--noclocks` | Strip clock annotations (`[%clk ...]`) from comments |
 
 ### Filtering Options
 
@@ -248,6 +249,7 @@ pgn-extract --validate games.pgn
 | `-L file` | Append diagnostics to log file |
 | `-r` | Report errors without extracting games |
 | `-s` | Silent mode (no game count) |
+| `--workers N` | Number of parallel worker threads (0 = auto-detect from CPU cores) |
 | `-h` | Show help |
 | `--version` | Show version |
 
@@ -381,7 +383,8 @@ pgn-extract-go/
 │   ├── hashing/         # Zobrist hashing and duplicate detection
 │   ├── matching/        # Game filtering and matching
 │   ├── output/          # Output formatting (PGN, JSON)
-│   └── parser/          # PGN lexer and parser
+│   ├── parser/          # PGN lexer and parser
+│   └── worker/          # Worker pool for parallel processing
 ├── docs/
 │   └── CQL.md           # CQL documentation
 ├── testdata/            # Test files and golden outputs
