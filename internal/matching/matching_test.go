@@ -220,6 +220,153 @@ func TestPositionMatcher(t *testing.T) {
 	}
 }
 
+// TestGameMatcherInterface verifies that concrete matchers implement GameMatcher
+func TestGameMatcherInterface(t *testing.T) {
+	// Verify all matchers implement the interface
+	var _ GameMatcher = NewGameFilter()
+	var _ GameMatcher = NewMaterialMatcher("Q:q", false)
+	var _ GameMatcher = NewVariationMatcher()
+}
+
+// TestCompositeMatcher_And verifies AND mode (all matchers must match)
+func TestCompositeMatcher_And(t *testing.T) {
+	game := parseTestGame(`
+[Event "Test"]
+[Site "Test"]
+[Date "2024.01.01"]
+[Round "1"]
+[White "Fischer, Robert"]
+[Black "Spassky, Boris"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 1-0
+`)
+
+	// Create two filters that both match
+	filter1 := NewGameFilter()
+	filter1.AddPlayerFilter("Fischer")
+
+	filter2 := NewGameFilter()
+	filter2.AddResultFilter("1-0")
+
+	// AND mode - both match
+	composite := NewCompositeMatcher(MatchAll, filter1, filter2)
+	if !composite.Match(game) {
+		t.Error("Expected AND match when both matchers match")
+	}
+
+	// Create a filter that doesn't match
+	filter3 := NewGameFilter()
+	filter3.AddResultFilter("0-1")
+
+	// AND mode - one doesn't match
+	composite2 := NewCompositeMatcher(MatchAll, filter1, filter3)
+	if composite2.Match(game) {
+		t.Error("Expected no AND match when one matcher fails")
+	}
+}
+
+// TestCompositeMatcher_Or verifies OR mode (any matcher must match)
+func TestCompositeMatcher_Or(t *testing.T) {
+	game := parseTestGame(`
+[Event "Test"]
+[Site "Test"]
+[Date "2024.01.01"]
+[Round "1"]
+[White "Fischer, Robert"]
+[Black "Spassky, Boris"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 1-0
+`)
+
+	// One matching filter, one non-matching
+	filter1 := NewGameFilter()
+	filter1.AddPlayerFilter("Fischer")
+
+	filter2 := NewGameFilter()
+	filter2.AddResultFilter("0-1") // Doesn't match
+
+	// OR mode - at least one matches
+	composite := NewCompositeMatcher(MatchAny, filter1, filter2)
+	if !composite.Match(game) {
+		t.Error("Expected OR match when at least one matcher matches")
+	}
+
+	// Both don't match
+	filter3 := NewGameFilter()
+	filter3.AddPlayerFilter("Karpov")
+
+	composite2 := NewCompositeMatcher(MatchAny, filter3, filter2)
+	if composite2.Match(game) {
+		t.Error("Expected no OR match when no matcher matches")
+	}
+}
+
+// TestCompositeMatcher_Name verifies the Name() method
+func TestCompositeMatcher_Name(t *testing.T) {
+	filter := NewGameFilter()
+	filter.AddPlayerFilter("Fischer")
+
+	composite := NewCompositeMatcher(MatchAll, filter)
+
+	name := composite.Name()
+	if name == "" {
+		t.Error("Expected non-empty composite matcher name")
+	}
+}
+
+// TestCompositeMatcher_Empty verifies empty composite behavior
+func TestCompositeMatcher_Empty(t *testing.T) {
+	game := parseTestGame(`
+[Event "Test"]
+[Site "Test"]
+[Date "2024.01.01"]
+[Round "1"]
+[White "Test"]
+[Black "Test"]
+[Result "*"]
+
+1. e4 *
+`)
+
+	// Empty composite in AND mode should match all (vacuously true)
+	composite := NewCompositeMatcher(MatchAll)
+	if !composite.Match(game) {
+		t.Error("Empty AND composite should match (vacuously true)")
+	}
+
+	// Empty composite in OR mode should not match (no conditions to satisfy)
+	composite2 := NewCompositeMatcher(MatchAny)
+	if composite2.Match(game) {
+		t.Error("Empty OR composite should not match")
+	}
+}
+
+// TestGameFilter_Name verifies GameFilter implements Name()
+func TestGameFilter_Name(t *testing.T) {
+	filter := NewGameFilter()
+	if filter.Name() != "GameFilter" {
+		t.Errorf("GameFilter.Name() = %s, want GameFilter", filter.Name())
+	}
+}
+
+// TestMaterialMatcher_Name verifies MaterialMatcher implements Name()
+func TestMaterialMatcher_Name(t *testing.T) {
+	matcher := NewMaterialMatcher("Q:q", false)
+	if matcher.Name() != "MaterialMatcher" {
+		t.Errorf("MaterialMatcher.Name() = %s, want MaterialMatcher", matcher.Name())
+	}
+}
+
+// TestVariationMatcher_Name verifies VariationMatcher implements Name()
+func TestVariationMatcher_Name(t *testing.T) {
+	matcher := NewVariationMatcher()
+	if matcher.Name() != "VariationMatcher" {
+		t.Errorf("VariationMatcher.Name() = %s, want VariationMatcher", matcher.Name())
+	}
+}
+
 func parseTestGame(pgn string) *chess.Game {
 	cfg := config.NewConfig()
 	cfg.Verbosity = 0

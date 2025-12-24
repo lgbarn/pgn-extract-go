@@ -81,6 +81,7 @@ func DecodeMove(moveString string) *chess.Move {
 
 	pos := 0
 	pieceToMove := chess.Empty
+	promotedPiece := chess.Empty
 
 	// Get current character helper
 	currentChar := func() byte {
@@ -171,8 +172,13 @@ func DecodeMove(moveString string) *chess.Move {
 				advance()
 			}
 			// Allow trailing 'b' as Bishop promotion
-			if isPiece(remaining()) != chess.Empty || currentChar() == 'b' {
+			if piece := isPiece(remaining()); piece != chess.Empty {
 				class = chess.PawnMoveWithPromotion
+				promotedPiece = piece
+				advance()
+			} else if currentChar() == 'b' {
+				class = chess.PawnMoveWithPromotion
+				promotedPiece = chess.Bishop
 				advance()
 			}
 		}
@@ -331,6 +337,7 @@ func DecodeMove(moveString string) *chess.Move {
 
 	move.Class = class
 	move.PieceToMove = pieceToMove
+	move.PromotedPiece = promotedPiece
 	move.FromCol = fromCol
 	move.FromRank = fromRank
 	move.ToCol = toCol

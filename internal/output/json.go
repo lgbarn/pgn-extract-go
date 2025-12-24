@@ -111,7 +111,7 @@ func GameToJSON(game *chess.Game, cfg *config.Config) *JSONGame {
 	jg.Result = result
 
 	// Final FEN if requested
-	if cfg.OutputFENString {
+	if cfg.Annotation.OutputFEN {
 		jg.FinalFEN = engine.BoardToFEN(board)
 	}
 
@@ -177,7 +177,7 @@ func convertMoves(moves *chess.Move, board *chess.Board, cfg *config.Config) []J
 		}
 
 		// NAGs
-		if cfg.KeepNAGs && len(move.NAGs) > 0 {
+		if cfg.Output.KeepNAGs && len(move.NAGs) > 0 {
 			for _, nag := range move.NAGs {
 				for _, text := range nag.Text {
 					jm.NAGs = append(jm.NAGs, text)
@@ -186,14 +186,14 @@ func convertMoves(moves *chess.Move, board *chess.Board, cfg *config.Config) []J
 		}
 
 		// Comments
-		if cfg.KeepComments && len(move.Comments) > 0 {
+		if cfg.Output.KeepComments && len(move.Comments) > 0 {
 			for _, comment := range move.Comments {
 				jm.Comments = append(jm.Comments, comment.Text)
 			}
 		}
 
 		// Variations
-		if cfg.KeepVariations && len(move.Variations) > 0 {
+		if cfg.Output.KeepVariations && len(move.Variations) > 0 {
 			for _, v := range move.Variations {
 				varMoves := convertVariation(v, board.Copy(), cfg)
 				if len(varMoves) > 0 {
@@ -206,7 +206,7 @@ func convertMoves(moves *chess.Move, board *chess.Board, cfg *config.Config) []J
 		engine.ApplyMove(board, move)
 
 		// Add FEN after move if requested
-		if cfg.AddFENComments {
+		if cfg.Annotation.AddFENComments {
 			jm.FEN = engine.BoardToFEN(board)
 		}
 
@@ -267,7 +267,7 @@ func convertVariation(v *chess.Variation, board *chess.Board, cfg *config.Config
 			jm.Promotion = pieceTypeName(move.PromotedPiece)
 		}
 
-		if cfg.KeepNAGs && len(move.NAGs) > 0 {
+		if cfg.Output.KeepNAGs && len(move.NAGs) > 0 {
 			for _, nag := range move.NAGs {
 				for _, text := range nag.Text {
 					jm.NAGs = append(jm.NAGs, text)
@@ -275,14 +275,14 @@ func convertVariation(v *chess.Variation, board *chess.Board, cfg *config.Config
 			}
 		}
 
-		if cfg.KeepComments && len(move.Comments) > 0 {
+		if cfg.Output.KeepComments && len(move.Comments) > 0 {
 			for _, comment := range move.Comments {
 				jm.Comments = append(jm.Comments, comment.Text)
 			}
 		}
 
 		// Nested variations
-		if cfg.KeepVariations && len(move.Variations) > 0 {
+		if cfg.Output.KeepVariations && len(move.Variations) > 0 {
 			for _, nested := range move.Variations {
 				nestedMoves := convertVariation(nested, board.Copy(), cfg)
 				if len(nestedMoves) > 0 {

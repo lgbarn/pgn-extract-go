@@ -36,49 +36,41 @@ func NewMaterialMatcher(pattern string, exact bool) *MaterialMatcher {
 func (mm *MaterialMatcher) parsePattern(pattern string) {
 	parts := strings.Split(pattern, ":")
 	if len(parts) >= 1 {
-		mm.parseWhitePieces(parts[0])
+		mm.parsePieces(parts[0], chess.White)
 	}
 	if len(parts) >= 2 {
-		mm.parseBlackPieces(parts[1])
+		mm.parsePieces(parts[1], chess.Black)
 	}
 }
 
-// parseWhitePieces parses white piece specification
-func (mm *MaterialMatcher) parseWhitePieces(s string) {
+// parsePieces parses a piece specification string for the given color.
+// White pieces use uppercase (KQRBNP), black pieces use lowercase (kqrbnp).
+func (mm *MaterialMatcher) parsePieces(s string, color chess.Colour) {
+	target := mm.whitePieces
+	if color == chess.Black {
+		target = mm.blackPieces
+	}
+
 	for _, c := range s {
-		switch c {
-		case 'K':
-			mm.whitePieces[chess.King]++
-		case 'Q':
-			mm.whitePieces[chess.Queen]++
-		case 'R':
-			mm.whitePieces[chess.Rook]++
-		case 'B':
-			mm.whitePieces[chess.Bishop]++
-		case 'N':
-			mm.whitePieces[chess.Knight]++
-		case 'P':
-			mm.whitePieces[chess.Pawn]++
+		// Normalize to uppercase for matching
+		upper := c
+		if c >= 'a' && c <= 'z' {
+			upper = c - 32 // Convert to uppercase
 		}
-	}
-}
 
-// parseBlackPieces parses black piece specification
-func (mm *MaterialMatcher) parseBlackPieces(s string) {
-	for _, c := range s {
-		switch c {
-		case 'k':
-			mm.blackPieces[chess.King]++
-		case 'q':
-			mm.blackPieces[chess.Queen]++
-		case 'r':
-			mm.blackPieces[chess.Rook]++
-		case 'b':
-			mm.blackPieces[chess.Bishop]++
-		case 'n':
-			mm.blackPieces[chess.Knight]++
-		case 'p':
-			mm.blackPieces[chess.Pawn]++
+		switch upper {
+		case 'K':
+			target[chess.King]++
+		case 'Q':
+			target[chess.Queen]++
+		case 'R':
+			target[chess.Rook]++
+		case 'B':
+			target[chess.Bishop]++
+		case 'N':
+			target[chess.Knight]++
+		case 'P':
+			target[chess.Pawn]++
 		}
 	}
 }
@@ -190,4 +182,14 @@ func (mm *MaterialMatcher) minimalMaterialMatch(whiteCounts, blackCounts map[che
 // HasCriteria returns true if a material pattern is set.
 func (mm *MaterialMatcher) HasCriteria() bool {
 	return mm.pattern != ""
+}
+
+// Match implements GameMatcher interface.
+func (mm *MaterialMatcher) Match(game *chess.Game) bool {
+	return mm.MatchGame(game)
+}
+
+// Name implements GameMatcher interface.
+func (mm *MaterialMatcher) Name() string {
+	return "MaterialMatcher"
 }

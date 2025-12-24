@@ -159,3 +159,13 @@ func (gf *GameFilter) SetUseSoundex(use bool) {
 func (gf *GameFilter) SetSubstringMatch(use bool) {
 	gf.TagMatcher.SetSubstringMatch(use)
 }
+
+// Match implements GameMatcher interface.
+func (gf *GameFilter) Match(game *chess.Game) bool {
+	return gf.MatchGame(game)
+}
+
+// Name implements GameMatcher interface.
+func (gf *GameFilter) Name() string {
+	return "GameFilter"
+}

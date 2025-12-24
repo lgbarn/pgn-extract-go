@@ -3,6 +3,8 @@ package cql
 import (
 	"fmt"
 	"strconv"
+
+	"github.com/lgbarn/pgn-extract-go/internal/errors"
 )
 
 // Parser parses CQL expressions into an AST.
@@ -40,7 +42,7 @@ func (p *Parser) ParseExpression() (Node, error) {
 	}
 
 	if len(nodes) == 0 {
-		return nil, fmt.Errorf("empty expression")
+		return nil, fmt.Errorf("empty expression: %w", errors.ErrCQLSyntax)
 	}
 
 	// If single node, return it directly
@@ -86,7 +88,7 @@ func (p *Parser) parsePrimary() (Node, error) {
 	case NUMBER:
 		val, err := strconv.Atoi(p.current.Literal)
 		if err != nil {
-			return nil, fmt.Errorf("invalid number: %s", p.current.Literal)
+			return nil, fmt.Errorf("invalid number: %s: %w", p.current.Literal, errors.ErrCQLSyntax)
 		}
 		node := &NumberNode{Value: val}
 		p.nextToken()
@@ -98,7 +100,7 @@ func (p *Parser) parsePrimary() (Node, error) {
 	case LT, GT, LE, GE, EQ:
 		return p.parseComparison()
 	default:
-		return nil, fmt.Errorf("unexpected token: %v (%q)", p.current.Type, p.current.Literal)
+		return nil, fmt.Errorf("unexpected token: %v (%q): %w", p.current.Type, p.current.Literal, errors.ErrCQLSyntax)
 	}
 }
 
@@ -118,7 +120,7 @@ func (p *Parser) parseParenExpr() (Node, error) {
 	case LT, GT, LE, GE, EQ:
 		return p.parseComparison()
 	default:
-		return nil, fmt.Errorf("unexpected token after '(': %v", p.current.Type)
+		return nil, fmt.Errorf("unexpected token after '(': %v: %w", p.current.Type, errors.ErrCQLSyntax)
 	}
 }
 
@@ -136,12 +138,12 @@ func (p *Parser) parseLogical() (Node, error) {
 	}
 
 	if p.current.Type != RPAREN {
-		return nil, fmt.Errorf("expected ')', got %v", p.current.Type)
+		return nil, fmt.Errorf("expected ')', got %v: %w", p.current.Type, errors.ErrCQLSyntax)
 	}
 	p.nextToken() // Skip ')'
 
 	if len(children) == 0 {
-		return nil, fmt.Errorf("logical operator %q requires at least one operand", op)
+		return nil, fmt.Errorf("logical operator %q requires at least one operand: %w", op, errors.ErrCQLSyntax)
 	}
 
 	return &LogicalNode{
@@ -158,7 +160,7 @@ func (p *Parser) parseParenFilter() (Node, error) {
 	}
 
 	if p.current.Type != RPAREN {
-		return nil, fmt.Errorf("expected ')', got %v", p.current.Type)
+		return nil, fmt.Errorf("expected ')', got %v: %w", p.current.Type, errors.ErrCQLSyntax)
 	}
 	p.nextToken() // Skip ')'
 
@@ -234,7 +236,7 @@ func (p *Parser) parseComparison() (Node, error) {
 	}
 
 	if p.current.Type != RPAREN {
-		return nil, fmt.Errorf("expected ')', got %v", p.current.Type)
+		return nil, fmt.Errorf("expected ')', got %v: %w", p.current.Type, errors.ErrCQLSyntax)
 	}
 	p.nextToken() // Skip ')'
 

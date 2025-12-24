@@ -91,7 +91,7 @@ func OutputGame(game *chess.Game, cfg *config.Config) {
 
 // outputTags outputs the game tags.
 func outputTags(game *chess.Game, cfg *config.Config, w io.Writer) {
-	switch cfg.TagOutputFormat {
+	switch cfg.Output.TagFormat {
 	case config.NoTags:
 		return
 	case config.SevenTagRoster:
@@ -134,7 +134,7 @@ func escapeTagValue(s string) string {
 
 // outputMoves outputs the game moves.
 func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
-	ow := NewOutputWriter(w, int(cfg.MaxLineLength))
+	ow := NewOutputWriter(w, int(cfg.Output.MaxLineLength))
 
 	// Start with initial position or FEN
 	var board *chess.Board
@@ -150,7 +150,7 @@ func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
 
 	for move := game.Moves; move != nil; move = move.Next {
 		// Output move number
-		if cfg.KeepMoveNumbers {
+		if cfg.Output.KeepMoveNumbers {
 			if isWhite {
 				ow.Write(fmt.Sprintf("%d.", moveNum))
 			} else if move.Prev == nil {
@@ -160,11 +160,11 @@ func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
 		}
 
 		// Output the move in the configured format
-		moveText := formatMove(move, board, cfg.OutputFormat)
+		moveText := formatMove(move, board, cfg.Output.Format)
 		ow.Write(moveText)
 
 		// Output NAGs
-		if cfg.KeepNAGs && len(move.NAGs) > 0 {
+		if cfg.Output.KeepNAGs && len(move.NAGs) > 0 {
 			for _, nag := range move.NAGs {
 				for _, text := range nag.Text {
 					ow.Write(text)
@@ -173,10 +173,10 @@ func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
 		}
 
 		// Output comments
-		if cfg.KeepComments && len(move.Comments) > 0 {
+		if cfg.Output.KeepComments && len(move.Comments) > 0 {
 			for _, comment := range move.Comments {
 				text := comment.Text
-				if cfg.StripClockAnnotations {
+				if cfg.Output.StripClockAnnotations {
 					text = stripClockAnnotations(text)
 				}
 				if text != "" {
@@ -186,7 +186,7 @@ func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
 		}
 
 		// Output variations
-		if cfg.KeepVariations && len(move.Variations) > 0 {
+		if cfg.Output.KeepVariations && len(move.Variations) > 0 {
 			for _, variation := range move.Variations {
 				savedState := board.SaveState()
 				outputVariation(variation, board, cfg, ow)
@@ -204,7 +204,7 @@ func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
 	}
 
 	// Output result
-	if cfg.KeepResults {
+	if cfg.Output.KeepResults {
 		result := ""
 		if game.Moves != nil {
 			lastMove := game.LastMove()
@@ -229,10 +229,10 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 	ow.Write("(")
 
 	// Prefix comments
-	if cfg.KeepComments {
+	if cfg.Output.KeepComments {
 		for _, comment := range variation.PrefixComment {
 			text := comment.Text
-			if cfg.StripClockAnnotations {
+			if cfg.Output.StripClockAnnotations {
 				text = stripClockAnnotations(text)
 			}
 			if text != "" {
@@ -248,7 +248,7 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 
 	for move := variation.Moves; move != nil; move = move.Next {
 		// Output move number
-		if cfg.KeepMoveNumbers {
+		if cfg.Output.KeepMoveNumbers {
 			if isWhite || first {
 				if isWhite {
 					ow.Write(fmt.Sprintf("%d.", moveNum))
@@ -260,11 +260,11 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 		first = false
 
 		// Output the move
-		moveText := formatMove(move, board, cfg.OutputFormat)
+		moveText := formatMove(move, board, cfg.Output.Format)
 		ow.Write(moveText)
 
 		// Output NAGs
-		if cfg.KeepNAGs && len(move.NAGs) > 0 {
+		if cfg.Output.KeepNAGs && len(move.NAGs) > 0 {
 			for _, nag := range move.NAGs {
 				for _, text := range nag.Text {
 					ow.Write(text)
@@ -273,10 +273,10 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 		}
 
 		// Output comments
-		if cfg.KeepComments && len(move.Comments) > 0 {
+		if cfg.Output.KeepComments && len(move.Comments) > 0 {
 			for _, comment := range move.Comments {
 				text := comment.Text
-				if cfg.StripClockAnnotations {
+				if cfg.Output.StripClockAnnotations {
 					text = stripClockAnnotations(text)
 				}
 				if text != "" {
@@ -286,7 +286,7 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 		}
 
 		// Nested variations
-		if cfg.KeepVariations && len(move.Variations) > 0 {
+		if cfg.Output.KeepVariations && len(move.Variations) > 0 {
 			for _, v := range move.Variations {
 				savedState := board.SaveState()
 				outputVariation(v, board, cfg, ow)
@@ -309,7 +309,7 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 		for lastMove.Next != nil {
 			lastMove = lastMove.Next
 		}
-		if lastMove.TerminatingResult != "" && cfg.KeepResults {
+		if lastMove.TerminatingResult != "" && cfg.Output.KeepResults {
 			ow.Write(lastMove.TerminatingResult)
 		}
 	}
@@ -317,10 +317,10 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 	ow.WriteNoSpace(")")
 
 	// Suffix comments
-	if cfg.KeepComments {
+	if cfg.Output.KeepComments {
 		for _, comment := range variation.SuffixComment {
 			text := comment.Text
-			if cfg.StripClockAnnotations {
+			if cfg.Output.StripClockAnnotations {
 				text = stripClockAnnotations(text)
 			}
 			if text != "" {

@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
+	"github.com/lgbarn/pgn-extract-go/internal/errors"
 )
 
 // SAN piece characters for FEN strings (always English).
@@ -62,7 +63,7 @@ func NewBoardFromFEN(fen string) (*chess.Board, error) {
 
 	parts := strings.Fields(fen)
 	if len(parts) < 1 {
-		return nil, fmt.Errorf("empty FEN string")
+		return nil, fmt.Errorf("empty FEN string: %w", errors.ErrInvalidFEN)
 	}
 
 	// Parse piece positions
@@ -84,7 +85,7 @@ func NewBoardFromFEN(fen string) (*chess.Board, error) {
 
 		piece := ConvertFENCharToPiece(byte(c))
 		if piece == chess.Empty {
-			return nil, fmt.Errorf("invalid piece character: %c", c)
+			return nil, fmt.Errorf("invalid piece character: %c: %w", c, errors.ErrInvalidFEN)
 		}
 
 		var colour chess.Colour
@@ -95,7 +96,7 @@ func NewBoardFromFEN(fen string) (*chess.Board, error) {
 		}
 
 		if col > 'h' || rank < '1' {
-			return nil, fmt.Errorf("position out of bounds")
+			return nil, fmt.Errorf("position out of bounds: %w", errors.ErrInvalidFEN)
 		}
 
 		board.Set(col, rank, chess.MakeColouredPiece(colour, piece))
@@ -122,7 +123,7 @@ func NewBoardFromFEN(fen string) (*chess.Board, error) {
 		case "b":
 			board.ToMove = chess.Black
 		default:
-			return nil, fmt.Errorf("invalid side to move: %s", parts[1])
+			return nil, fmt.Errorf("invalid side to move: %s: %w", parts[1], errors.ErrInvalidFEN)
 		}
 	}
 

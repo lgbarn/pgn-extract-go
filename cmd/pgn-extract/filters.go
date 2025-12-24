@@ -9,6 +9,7 @@ import (
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
 	"github.com/lgbarn/pgn-extract-go/internal/engine"
 	"github.com/lgbarn/pgn-extract-go/internal/hashing"
+	"github.com/lgbarn/pgn-extract-go/internal/processing"
 )
 
 // FilterResult holds the result of applying all filters to a game.
@@ -80,7 +81,7 @@ func applyFilters(game *chess.Game, ctx *ProcessingContext) FilterResult {
 	}
 
 	// Calculate ply count for bounds checking
-	result.PlyCount = countPlies(game)
+	result.PlyCount = processing.CountPlies(game)
 
 	// Check ply bounds
 	if result.Matched && *minPly > 0 && result.PlyCount < *minPly {
@@ -103,8 +104,8 @@ func applyFilters(game *chess.Game, ctx *ProcessingContext) FilterResult {
 	cfg := ctx.cfg
 	needsReplay := *checkmateFilter || *stalemateFilter || ctx.detector != nil ||
 		*fiftyMoveFilter || *repetitionFilter || *underpromotionFilter ||
-		*higherRatedWinner || *lowerRatedWinner || cfg.AddFENComments || cfg.AddHashcodeComments ||
-		cfg.AddHashcodeTag
+		*higherRatedWinner || *lowerRatedWinner || cfg.Annotation.AddFENComments || cfg.Annotation.AddHashComments ||
+		cfg.Annotation.AddHashTag
 
 	if needsReplay {
 		result.Board, result.GameInfo = analyzeGame(game)
@@ -147,7 +148,7 @@ func applyFilters(game *chess.Game, ctx *ProcessingContext) FilterResult {
 
 	// Check commented filter
 	if result.Matched && *commentedFilter {
-		if !hasComments(game) {
+		if !processing.HasComments(game) {
 			result.Matched = false
 		}
 	}
@@ -184,36 +185,17 @@ func applyFilters(game *chess.Game, ctx *ProcessingContext) FilterResult {
 	}
 
 	// Add plycount tag if requested (and matched)
-	if result.Matched && cfg.OutputPlycount {
+	if result.Matched && cfg.Annotation.AddPlyCount {
 		game.Tags["PlyCount"] = strconv.Itoa(result.PlyCount)
 	}
 
 	// Add hashcode tag if requested (and matched)
-	if result.Matched && cfg.AddHashcodeTag && result.Board != nil {
+	if result.Matched && cfg.Annotation.AddHashTag && result.Board != nil {
 		hash := hashing.GenerateZobristHash(result.Board)
 		game.Tags["HashCode"] = fmt.Sprintf("%016x", hash)
 	}
 
 	return result
-}
-
-// countPlies counts the number of half-moves in a game
-func countPlies(game *chess.Game) int {
-	count := 0
-	for move := game.Moves; move != nil; move = move.Next {
-		count++
-	}
-	return count
-}
-
-// hasComments checks if a game has any comments
-func hasComments(game *chess.Game) bool {
-	for move := game.Moves; move != nil; move = move.Next {
-		if move.HasComments() {
-			return true
-		}
-	}
-	return false
 }
 
 // parseElo parses an Elo rating string to int

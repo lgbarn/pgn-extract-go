@@ -1,9 +1,11 @@
 package engine
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
+	perrors "github.com/lgbarn/pgn-extract-go/internal/errors"
 )
 
 func TestNewBoardFromFEN(t *testing.T) {
@@ -182,4 +184,77 @@ func TestApplyMove(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestNewBoardFromFEN_ErrorTypes verifies that FEN parsing returns
+// properly wrapped errors that can be checked with errors.Is()
+func TestNewBoardFromFEN_ErrorTypes(t *testing.T) {
+	tests := []struct {
+		name        string
+		fen         string
+		wantErr     error
+		wantContain string
+	}{
+		{
+			name:        "empty string",
+			fen:         "",
+			wantErr:     perrors.ErrInvalidFEN,
+			wantContain: "empty",
+		},
+		{
+			name:        "invalid piece character",
+			fen:         "rnbqkbnr/ppppXppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+			wantErr:     perrors.ErrInvalidFEN,
+			wantContain: "piece",
+		},
+		{
+			name:        "invalid side to move",
+			fen:         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR x KQkq - 0 1",
+			wantErr:     perrors.ErrInvalidFEN,
+			wantContain: "side",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewBoardFromFEN(tt.fen)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+
+			// Check that error wraps the sentinel error
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("errors.Is(err, %v) = false, want true\nerr = %v", tt.wantErr, err)
+			}
+
+			// Check error message contains expected text
+			if tt.wantContain != "" && !containsIgnoreCase(err.Error(), tt.wantContain) {
+				t.Errorf("error message %q should contain %q", err.Error(), tt.wantContain)
+			}
+		})
+	}
+}
+
+// containsIgnoreCase checks if s contains substr (case-insensitive)
+func containsIgnoreCase(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		match := true
+		for j := 0; j < len(substr); j++ {
+			cs, csub := s[i+j], substr[j]
+			if cs >= 'A' && cs <= 'Z' {
+				cs += 'a' - 'A'
+			}
+			if csub >= 'A' && csub <= 'Z' {
+				csub += 'a' - 'A'
+			}
+			if cs != csub {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }

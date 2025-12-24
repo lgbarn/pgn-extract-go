@@ -8,6 +8,20 @@ import (
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
 )
 
+// GameInfo is an interface for game analysis results.
+// Implementations should provide information about game properties
+// discovered during analysis (e.g., checkmate, stalemate, repetition).
+type GameInfo interface {
+	// FiftyMoveTriggered returns true if the game triggered the fifty-move rule.
+	FiftyMoveTriggered() bool
+
+	// RepetitionDetected returns true if the game has a threefold repetition.
+	RepetitionDetected() bool
+
+	// UnderpromotionFound returns true if any pawn promoted to non-queen.
+	UnderpromotionFound() bool
+}
+
 // WorkItem represents a game to be processed.
 type WorkItem struct {
 	Game  *chess.Game
@@ -20,10 +34,21 @@ type ProcessResult struct {
 	Index        int
 	Matched      bool
 	Board        *chess.Board // Final board position (may be nil)
-	GameInfo     interface{}  // GameAnalysis or similar (may be nil)
+	GameInfo     interface{}  // Implements GameInfo or is nil
 	ShouldOutput bool         // Whether to output this game
 	OutputToDup  bool         // Whether to output to duplicate file
 	Error        error
+}
+
+// GetGameInfo returns the GameInfo if it implements the interface, or nil.
+func (r *ProcessResult) GetGameInfo() GameInfo {
+	if r.GameInfo == nil {
+		return nil
+	}
+	if gi, ok := r.GameInfo.(GameInfo); ok {
+		return gi
+	}
+	return nil
 }
 
 // ProcessFunc is the function signature for processing a work item.

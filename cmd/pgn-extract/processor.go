@@ -19,6 +19,16 @@ import (
 	"github.com/lgbarn/pgn-extract-go/internal/worker"
 )
 
+// withOutputFile temporarily redirects output to a different writer, executes fn,
+// then restores the original output file. This eliminates the repeated pattern of
+// saving, swapping, and restoring the output file.
+func withOutputFile(cfg *config.Config, w io.Writer, fn func()) {
+	original := cfg.OutputFile
+	cfg.OutputFile = w
+	fn()
+	cfg.OutputFile = original
+}
+
 // ProcessingContext holds all processing state
 type ProcessingContext struct {
 	cfg              *config.Config
@@ -138,10 +148,9 @@ func outputGamesSequential(games []*chess.Game, ctx *ProcessingContext) (int, in
 		// If not matched, skip or output to non-matching file
 		if !filterResult.Matched {
 			if cfg.NonMatchingFile != nil {
-				originalOutput := cfg.OutputFile
-				cfg.OutputFile = cfg.NonMatchingFile
-				output.OutputGame(game, cfg)
-				cfg.OutputFile = originalOutput
+				withOutputFile(cfg, cfg.NonMatchingFile, func() {
+					output.OutputGame(game, cfg)
+				})
 			}
 			continue
 		}
@@ -165,29 +174,28 @@ func outputGamesSequential(games []*chess.Game, ctx *ProcessingContext) (int, in
 			if isDuplicate {
 				duplicateCount++
 				// Output to duplicate file if configured
-				if cfg.DuplicateFile != nil {
-					originalOutput := cfg.OutputFile
-					cfg.OutputFile = cfg.DuplicateFile
-					if cfg.JSONFormat {
-						output.OutputGameJSON(game, cfg)
-					} else {
-						output.OutputGame(game, cfg)
-					}
-					cfg.OutputFile = originalOutput
+				if cfg.Duplicate.DuplicateFile != nil {
+					withOutputFile(cfg, cfg.Duplicate.DuplicateFile, func() {
+						if cfg.Output.JSONFormat {
+							output.OutputGameJSON(game, cfg)
+						} else {
+							output.OutputGame(game, cfg)
+						}
+					})
 				}
 				// If outputting only duplicates
-				if cfg.SuppressOriginals {
+				if cfg.Duplicate.SuppressOriginals {
 					outputGameWithAnnotations(game, cfg, filterResult.GameInfo, &jsonGames)
 					atomic.AddInt64(&matchedCount, 1)
 					outputCount++
 				}
 			} else {
 				// Not a duplicate - output normally unless suppressing duplicates
-				if !cfg.SuppressDuplicates {
+				if !cfg.Duplicate.Suppress {
 					outputGameWithAnnotations(game, cfg, filterResult.GameInfo, &jsonGames)
 					atomic.AddInt64(&matchedCount, 1)
 					outputCount++
-				} else if !cfg.SuppressOriginals {
+				} else if !cfg.Duplicate.SuppressOriginals {
 					outputGameWithAnnotations(game, cfg, filterResult.GameInfo, &jsonGames)
 					atomic.AddInt64(&matchedCount, 1)
 					outputCount++
@@ -202,7 +210,7 @@ func outputGamesSequential(games []*chess.Game, ctx *ProcessingContext) (int, in
 	}
 
 	// Output JSON array if JSON mode
-	if cfg.JSONFormat && len(jsonGames) > 0 {
+	if cfg.Output.JSONFormat && len(jsonGames) > 0 {
 		output.OutputGamesJSON(jsonGames, cfg, cfg.OutputFile)
 	}
 
@@ -256,10 +264,9 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 		// Handle non-matching games
 		if !result.Matched {
 			if cfg.NonMatchingFile != nil {
-				originalOutput := cfg.OutputFile
-				cfg.OutputFile = cfg.NonMatchingFile
-				output.OutputGame(result.Game, cfg)
-				cfg.OutputFile = originalOutput
+				withOutputFile(cfg, cfg.NonMatchingFile, func() {
+					output.OutputGame(result.Game, cfg)
+				})
 			}
 			continue
 		}
@@ -283,18 +290,17 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 			if isDuplicate {
 				atomic.AddInt64(&duplicateCount, 1)
 				// Output to duplicate file if configured
-				if cfg.DuplicateFile != nil {
-					originalOutput := cfg.OutputFile
-					cfg.OutputFile = cfg.DuplicateFile
-					if cfg.JSONFormat {
-						output.OutputGameJSON(result.Game, cfg)
-					} else {
-						output.OutputGame(result.Game, cfg)
-					}
-					cfg.OutputFile = originalOutput
+				if cfg.Duplicate.DuplicateFile != nil {
+					withOutputFile(cfg, cfg.Duplicate.DuplicateFile, func() {
+						if cfg.Output.JSONFormat {
+							output.OutputGameJSON(result.Game, cfg)
+						} else {
+							output.OutputGame(result.Game, cfg)
+						}
+					})
 				}
 				// If outputting only duplicates
-				if cfg.SuppressOriginals {
+				if cfg.Duplicate.SuppressOriginals {
 					gameInfo, _ := result.GameInfo.(*GameAnalysis)
 					outputGameWithAnnotations(result.Game, cfg, gameInfo, &jsonGames)
 					atomic.AddInt64(&matchedCount, 1)
@@ -302,12 +308,12 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 				}
 			} else {
 				// Not a duplicate - output normally unless suppressing duplicates
-				if !cfg.SuppressDuplicates {
+				if !cfg.Duplicate.Suppress {
 					gameInfo, _ := result.GameInfo.(*GameAnalysis)
 					outputGameWithAnnotations(result.Game, cfg, gameInfo, &jsonGames)
 					atomic.AddInt64(&matchedCount, 1)
 					atomic.AddInt64(&outputCount, 1)
-				} else if !cfg.SuppressOriginals {
+				} else if !cfg.Duplicate.SuppressOriginals {
 					gameInfo, _ := result.GameInfo.(*GameAnalysis)
 					outputGameWithAnnotations(result.Game, cfg, gameInfo, &jsonGames)
 					atomic.AddInt64(&matchedCount, 1)
@@ -324,7 +330,7 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 	}
 
 	// Output JSON array if JSON mode
-	if cfg.JSONFormat && len(jsonGames) > 0 {
+	if cfg.Output.JSONFormat && len(jsonGames) > 0 {
 		output.OutputGamesJSON(jsonGames, cfg, cfg.OutputFile)
 	}
 
@@ -359,7 +365,7 @@ func outputGameWithAnnotations(game *chess.Game, cfg *config.Config, gameInfo *G
 		defer sw.IncrementGameCount()
 	}
 
-	if cfg.JSONFormat {
+	if cfg.Output.JSONFormat {
 		*jsonGames = append(*jsonGames, game)
 	} else {
 		output.OutputGame(game, cfg)

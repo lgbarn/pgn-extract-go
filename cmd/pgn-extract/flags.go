@@ -114,38 +114,38 @@ var (
 func applyFlags(cfg *config.Config) {
 	// Tag output
 	if *sevenTagOnly {
-		cfg.TagOutputFormat = config.SevenTagRoster
+		cfg.Output.TagFormat = config.SevenTagRoster
 	}
 	if *noTags {
-		cfg.TagOutputFormat = config.NoTags
+		cfg.Output.TagFormat = config.NoTags
 	}
 
 	// Content
-	cfg.KeepComments = !*noComments
-	cfg.KeepNAGs = !*noNAGs
-	cfg.KeepVariations = !*noVariations
-	cfg.KeepResults = !*noResults
-	cfg.StripClockAnnotations = *noClocks
+	cfg.Output.KeepComments = !*noComments
+	cfg.Output.KeepNAGs = !*noNAGs
+	cfg.Output.KeepVariations = !*noVariations
+	cfg.Output.KeepResults = !*noResults
+	cfg.Output.StripClockAnnotations = *noClocks
 
 	// Line length
-	cfg.MaxLineLength = uint(*lineLength)
+	cfg.Output.MaxLineLength = uint(*lineLength)
 
 	// Output format
 	switch *outputFormat {
 	case "lalg":
-		cfg.OutputFormat = config.LALG
+		cfg.Output.Format = config.LALG
 	case "halg":
-		cfg.OutputFormat = config.HALG
+		cfg.Output.Format = config.HALG
 	case "elalg":
-		cfg.OutputFormat = config.ELALG
+		cfg.Output.Format = config.ELALG
 	case "uci":
-		cfg.OutputFormat = config.UCI
+		cfg.Output.Format = config.UCI
 	case "epd":
-		cfg.OutputFormat = config.EPD
+		cfg.Output.Format = config.EPD
 	case "fen":
-		cfg.OutputFormat = config.FEN
+		cfg.Output.Format = config.FEN
 	default:
-		cfg.OutputFormat = config.SAN
+		cfg.Output.Format = config.SAN
 	}
 
 	// Verbosity
@@ -154,38 +154,38 @@ func applyFlags(cfg *config.Config) {
 	}
 
 	// JSON output
-	cfg.JSONFormat = *jsonOutput
+	cfg.Output.JSONFormat = *jsonOutput
 
 	// Ply/move bounds
 	if *minPly > 0 || *maxPly > 0 || *minMoves > 0 || *maxMoves > 0 {
-		cfg.CheckMoveBounds = true
+		cfg.Filter.CheckMoveBounds = true
 		if *minMoves > 0 {
-			cfg.LowerMoveBound = uint(*minMoves)
+			cfg.Filter.LowerMoveBound = uint(*minMoves)
 		}
 		if *maxMoves > 0 {
-			cfg.UpperMoveBound = uint(*maxMoves)
+			cfg.Filter.UpperMoveBound = uint(*maxMoves)
 		}
 	}
 
 	// Annotations
-	cfg.OutputPlycount = *addPlyCount
-	cfg.AddFENComments = *addFENComments
-	cfg.AddHashcodeComments = *addHashComments
-	cfg.AddHashcodeTag = *addHashcodeTag
+	cfg.Annotation.AddPlyCount = *addPlyCount
+	cfg.Annotation.AddFENComments = *addFENComments
+	cfg.Annotation.AddHashComments = *addHashComments
+	cfg.Annotation.AddHashTag = *addHashcodeTag
 
 	// Tag fixing
-	cfg.FixResultTags = *fixResultTags
-	cfg.FixTagStrings = *fixTagStrings
+	cfg.Annotation.FixResultTags = *fixResultTags
+	cfg.Annotation.FixTagStrings = *fixTagStrings
 
 	// Game feature matching
-	cfg.MatchOnlyCheckmate = *checkmateFilter
-	cfg.MatchOnlyStalemate = *stalemateFilter
-	cfg.CheckForFiftyMoveRule = *fiftyMoveFilter
-	cfg.CheckForRepetition = *repetitionFilter
-	cfg.MatchUnderpromotion = *underpromotionFilter
+	cfg.Filter.MatchCheckmate = *checkmateFilter
+	cfg.Filter.MatchStalemate = *stalemateFilter
+	cfg.Filter.CheckFiftyMoveRule = *fiftyMoveFilter
+	cfg.Filter.CheckRepetition = *repetitionFilter
+	cfg.Filter.MatchUnderpromotion = *underpromotionFilter
 
 	// Soundex
-	cfg.UseSoundex = *useSoundex
+	cfg.Filter.UseSoundex = *useSoundex
 
 	// Report only mode
 	cfg.CheckOnly = *reportOnly

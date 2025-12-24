@@ -91,15 +91,15 @@ func main() {
 			os.Exit(1)
 		}
 		defer dupFile.Close()
-		cfg.DuplicateFile = dupFile
+		cfg.Duplicate.DuplicateFile = dupFile
 	}
 
 	// Create duplicate detector if needed
 	var detector *hashing.DuplicateDetector
 	if *suppressDuplicates || *duplicateFile != "" || *outputDupsOnly || *checkFile != "" {
 		detector = hashing.NewDuplicateDetector(false)
-		cfg.SuppressDuplicates = *suppressDuplicates
-		cfg.SuppressOriginals = *outputDupsOnly
+		cfg.Duplicate.Suppress = *suppressDuplicates
+		cfg.Duplicate.SuppressOriginals = *outputDupsOnly
 	}
 
 	// Load check file for duplicate detection

@@ -224,3 +224,13 @@ func matchesFENPosition(board *chess.Board, fen string) bool {
 func (vm *VariationMatcher) HasCriteria() bool {
 	return len(vm.moveSequences) > 0 || len(vm.positionSequences) > 0
 }
+
+// Match implements GameMatcher interface.
+func (vm *VariationMatcher) Match(game *chess.Game) bool {
+	return vm.MatchGame(game)
+}
+
+// Name implements GameMatcher interface.
+func (vm *VariationMatcher) Name() string {
+	return "VariationMatcher"
+}

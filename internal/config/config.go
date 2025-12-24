@@ -71,26 +71,16 @@ type GameNumber struct {
 // Config holds all program configuration and state.
 // This replaces the C StateInfo struct.
 type Config struct {
+	// Embedded sub-configs for organized access
+	Output     *OutputConfig
+	Filter     *FilterConfig
+	Duplicate  *DuplicateConfig
+	Annotation *AnnotationConfig
+
 	// Processing state
 	SkippingCurrentGame bool
 	CheckOnly           bool
 	Verbosity           int // 0=nothing, 1=game count, 2=running commentary
-
-	// Content filtering
-	KeepNAGs              bool
-	KeepComments          bool
-	KeepVariations        bool
-	StripClockAnnotations bool
-	TagOutputFormat       TagOutputForm
-	MatchPermutations     bool
-	PositionalVariations  bool
-	UseSoundex            bool
-
-	// Duplicate handling
-	SuppressDuplicates   bool
-	SuppressOriginals    bool
-	FuzzyMatchDuplicates bool
-	FuzzyMatchDepth      uint
 
 	// Tag checking
 	CheckTags bool
@@ -100,76 +90,19 @@ type Config struct {
 	ParsingECOFile bool
 	ECOLevel       EcoDivision
 
-	// Output
-	OutputFormat  OutputFormat
-	MaxLineLength uint
-	JSONFormat    bool
+	// Parsing options
+	AllowNullMoves      bool
+	AllowNestedComments bool
 
-	// Virtual hash table
-	UseVirtualHashTable bool
+	// Split options
+	SplitVariants   bool
+	SplitDepthLimit uint
 
-	// Move bounds
-	CheckMoveBounds bool
-	LowerMoveBound  uint
-	UpperMoveBound  uint
-	OutputPlyLimit  int
-
-	// Match conditions
-	MatchOnlyCheckmate    bool
-	MatchOnlyStalemate    bool
-	MatchUnderpromotion   bool
-	CheckForRepetition    bool
-	CheckForFiftyMoveRule bool
-	TagMatchAnywhere      bool
-
-	// Output options
-	KeepMoveNumbers         bool
-	KeepResults             bool
-	KeepChecks              bool
-	OutputEvaluation        bool
-	KeepBrokenGames         bool
-	SuppressRedundantEPInfo bool
-
-	// Positional search
-	DepthOfPositionalSearch uint
-
-	// Counters
-	NumGamesProcessed uint
-	NumGamesMatched   uint
-	GamesPerFile      uint
-	NextFileNumber    uint
-
-	// Quiescence
-	QuiescenceThreshold uint
-	MaximumMatches      uint
-
-	// Ply manipulation
-	DropPlyNumber int
-	StartPly      uint
-
-	// FEN options
-	OutputFENString           bool
-	AddFENComments            bool
-	AddHashcodeComments       bool
-	AddPositionMatchComments  bool
-	OutputPlycount            bool
-	OutputTotalPlycount       bool
-	AddHashcodeTag            bool
-	FixResultTags             bool
-	FixTagStrings             bool
-	AddFENCastling            bool
-	SeparateCommentLines      bool
-	SplitVariants             bool
+	// Consistency checks
 	RejectInconsistentResults bool
-	AllowNullMoves            bool
-	AllowNestedComments       bool
-	AddMatchTag               bool
-	AddMatchLabelTag          bool
+	SuppressRedundantEPInfo   bool
 	OnlyOutputWantedTags      bool
 	DeleteSameSetup           bool
-
-	// Split depth limit (0 = no limit)
-	SplitDepthLimit uint
 
 	// Current file type
 	CurrentFileType SourceFileType
@@ -181,10 +114,8 @@ type Config struct {
 	WhoseMove chess.WhoseMove
 
 	// Comment patterns
-	PositionMatchComment string
-	FENCommentPattern    string
-	DropCommentPattern   string
-	LineNumberMarker     string
+	DropCommentPattern string
+	LineNumberMarker   string
 
 	// File handling
 	CurrentInputFile string
@@ -194,7 +125,6 @@ type Config struct {
 	// Output streams
 	OutputFile      io.Writer
 	LogFile         io.Writer
-	DuplicateFile   io.Writer
 	NonMatchingFile io.Writer
 
 	// Game number selection
@@ -202,6 +132,12 @@ type Config struct {
 	NextGameNumberToOutput *GameNumber
 	SkipGameNumbers        *GameNumber
 	NextGameNumberToSkip   *GameNumber
+
+	// Counters (runtime state - consider moving out of config)
+	NumGamesProcessed uint
+	NumGamesMatched   uint
+	GamesPerFile      uint
+	NextFileNumber    uint
 }
 
 // GlobalConfig is the global configuration instance.
@@ -210,21 +146,21 @@ var GlobalConfig *Config
 // NewConfig creates a new Config with default values.
 func NewConfig() *Config {
 	return &Config{
-		Verbosity:       1,
-		KeepNAGs:        true,
-		KeepComments:    true,
-		KeepVariations:  true,
-		TagOutputFormat: AllTags,
-		OutputFormat:    SAN,
-		MaxLineLength:   80,
-		KeepMoveNumbers: true,
-		KeepResults:     true,
-		KeepChecks:      true,
-		OutputFile:      os.Stdout,
-		LogFile:         os.Stderr,
-		WhoseMove:       chess.EitherToMove,
-		SetupStatus:     SetupTagOK,
+		Output:      NewOutputConfig(),
+		Filter:      NewFilterConfig(),
+		Duplicate:   NewDuplicateConfig(),
+		Annotation:  NewAnnotationConfig(),
+		Verbosity:   1,
+		OutputFile:  os.Stdout,
+		LogFile:     os.Stderr,
+		WhoseMove:   chess.EitherToMove,
+		SetupStatus: SetupTagOK,
 	}
+}
+
+// SetOutput sets the output writer.
+func (c *Config) SetOutput(w io.Writer) {
+	c.OutputFile = w
 }
 
 // Init initializes the global configuration.

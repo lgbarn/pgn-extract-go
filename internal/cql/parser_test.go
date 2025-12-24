@@ -1,7 +1,10 @@
 package cql
 
 import (
+	"errors"
 	"testing"
+
+	perrors "github.com/lgbarn/pgn-extract-go/internal/errors"
 )
 
 func TestParserSimpleFilters(t *testing.T) {
@@ -315,6 +318,35 @@ func TestParserErrors(t *testing.T) {
 			_, err := Parse(input)
 			if err == nil {
 				t.Error("expected error, got nil")
+			}
+		})
+	}
+}
+
+// TestParserErrors_SentinelErrors verifies that parser errors can be
+// detected with errors.Is(err, ErrCQLSyntax)
+func TestParserErrors_SentinelErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr error
+	}{
+		{"empty expression", "", perrors.ErrCQLSyntax},
+		{"unclosed paren", "(", perrors.ErrCQLSyntax},
+		{"unexpected close paren", ")", perrors.ErrCQLSyntax},
+		{"empty logical", "(and )", perrors.ErrCQLSyntax},
+		{"missing operand", "(> )", perrors.ErrCQLSyntax},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse(tt.input)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("errors.Is(err, %v) = false, want true\nerr = %v", tt.wantErr, err)
 			}
 		})
 	}
