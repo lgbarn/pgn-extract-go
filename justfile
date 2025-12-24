@@ -84,11 +84,11 @@ fmt:
 
 # Run go vet linter
 lint:
-    go vet ./...
+    GO111MODULE=on go vet ./...
 
 # Run staticcheck if available
 staticcheck:
-    staticcheck ./... || echo "Install with: go install honnef.co/go/tools/cmd/staticcheck@latest"
+    GO111MODULE=on staticcheck ./... || echo "Install with: go install honnef.co/go/tools/cmd/staticcheck@latest"
 
 # Run all checks (fmt, lint, test)
 check: fmt lint test
