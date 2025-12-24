@@ -51,7 +51,7 @@ test-race:
 # Run tests with coverage report
 test-coverage:
     GO111MODULE=on go test -coverprofile=coverage.out ./...
-    go tool cover -html=coverage.out -o coverage.html
+    GO111MODULE=on go tool cover -html=coverage.out -o coverage.html
     @echo "Coverage report: coverage.html"
 
 # Run only golden tests
@@ -131,20 +131,20 @@ loc-detail:
 
 # Download dependencies
 deps:
-    go mod download
+    GO111MODULE=on go mod download
 
 # Update dependencies
 update-deps:
-    go get -u ./...
-    go mod tidy
+    GO111MODULE=on go get -u ./...
+    GO111MODULE=on go mod tidy
 
 # Tidy go.mod
 tidy:
-    go mod tidy
+    GO111MODULE=on go mod tidy
 
 # Show module dependency graph
 deps-graph:
-    go mod graph
+    GO111MODULE=on go mod graph
 
 # ─────────────────────────────────────────────────────────────
 # Benchmarking
