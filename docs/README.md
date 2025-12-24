@@ -20,6 +20,7 @@ A command-line tool for searching, manipulating, and formatting chess games in P
 - [Validation and Fixing](#validation-and-fixing)
 - [Command Reference](#command-reference)
 - [Examples](#examples)
+- [Development](#development)
 
 ---
 
@@ -72,13 +73,18 @@ Requires Go 1.21 or later.
 ```bash
 git clone https://github.com/lgbarn/pgn-extract-go.git
 cd pgn-extract-go
-go build -o pgn-extract-go ./cmd/pgn-extract
+
+# Using just (recommended)
+just build
+
+# Or using go directly
+go build -o pgn-extract ./cmd/pgn-extract
 ```
 
 ### Verify Installation
 
 ```bash
-./pgn-extract-go --version
+./pgn-extract --version
 ```
 
 ---
@@ -1135,6 +1141,57 @@ pgn-extract-go -Te "B90" -e eco.pgn -o najdorf.pgn games.pgn
 # Find potentially problematic games (ended in mate but result is draw)
 pgn-extract-go --checkmate -Tr "1/2-1/2" suspicious.pgn
 ```
+
+---
+
+## Development
+
+This project uses [just](https://github.com/casey/just) as a command runner for common development tasks.
+
+### Quick Reference
+
+```bash
+just --list         # Show all available commands
+just build          # Build the binary
+just test           # Run all tests
+just test-race      # Run tests with race detector
+just test-coverage  # Generate HTML coverage report
+just check          # Format, lint, and test
+just run -h         # Build and run with arguments
+```
+
+### Build Commands
+
+| Command | Description |
+|---------|-------------|
+| `just build` | Build binary to `./pgn-extract` |
+| `just build-release` | Build optimized release binary |
+| `just install` | Install to `$GOPATH/bin` |
+| `just clean` | Remove build artifacts |
+
+### Test Commands
+
+| Command | Description |
+|---------|-------------|
+| `just test` | Run all tests |
+| `just test-verbose` | Run tests with verbose output |
+| `just test-race` | Run with race detector |
+| `just test-coverage` | Generate HTML coverage report |
+| `just test-golden` | Run golden tests only |
+| `just test-cql` | Run CQL tests only |
+| `just test-pkg <pkg>` | Run tests for specific package |
+| `just test-run <name>` | Run specific test by name |
+
+### Development Commands
+
+| Command | Description |
+|---------|-------------|
+| `just fmt` | Format all Go code |
+| `just lint` | Run go vet |
+| `just check` | Format, lint, and test |
+| `just watch` | Rebuild on file changes (requires watchexec) |
+| `just bench` | Run benchmarks |
+| `just loc` | Count lines of code |
 
 ---
 

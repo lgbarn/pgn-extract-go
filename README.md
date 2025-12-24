@@ -72,7 +72,8 @@ Or build from source:
 ```bash
 git clone git@github.com:lgbarn/pgn-extract-go.git
 cd pgn-extract-go
-go build -o pgn-extract ./cmd/pgn-extract
+just build        # Requires 'just' command runner
+# Or: go build -o pgn-extract ./cmd/pgn-extract
 ```
 
 ## Quick Start
@@ -373,7 +374,11 @@ Structured JSON with full game data:
 ```
 pgn-extract-go/
 ├── cmd/pgn-extract/     # Command-line application
-│   └── main.go          # Entry point and CLI handling
+│   ├── main.go          # Entry point and initialization
+│   ├── flags.go         # CLI flag definitions
+│   ├── processor.go     # Game processing and worker pool
+│   ├── filters.go       # Game filtering logic
+│   └── analysis.go      # Game analysis and validation
 ├── internal/
 │   ├── chess/           # Core chess types (Board, Game, Move)
 │   ├── config/          # Configuration management
@@ -388,28 +393,52 @@ pgn-extract-go/
 ├── docs/
 │   └── CQL.md           # CQL documentation
 ├── testdata/            # Test files and golden outputs
+├── justfile             # Build automation (just command runner)
 └── go.mod
 ```
 
-## Testing
+## Development
 
-Run the test suite:
+This project uses [just](https://github.com/casey/just) as a command runner. Run `just --list` to see all available recipes.
+
+### Building
+
+```bash
+just build          # Build the binary
+just build-release  # Build optimized release binary
+just install        # Install to $GOPATH/bin
+just clean          # Remove build artifacts
+```
+
+### Testing
+
+```bash
+just test           # Run all tests
+just test-verbose   # Run with verbose output
+just test-race      # Run with race detector
+just test-coverage  # Generate coverage report
+just test-golden    # Run golden tests only
+just test-cql       # Run CQL tests only
+just test-pkg internal/parser  # Test specific package
+```
+
+### Other Commands
+
+```bash
+just fmt            # Format code
+just lint           # Run go vet
+just check          # Format, lint, and test
+just run -h         # Build and run with arguments
+just loc            # Count lines of code
+just bench          # Run benchmarks
+```
+
+If you don't have `just` installed, you can use Go commands directly:
 
 ```bash
 go test ./...
-```
-
-Run tests with verbose output:
-
-```bash
 go test -v ./...
-```
-
-Run specific package tests:
-
-```bash
 go test ./internal/cql/...
-go test ./internal/parser/...
 ```
 
 ## Credits
