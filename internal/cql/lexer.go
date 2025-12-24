@@ -19,12 +19,12 @@ const (
 	RPAREN // )
 
 	// Literals
-	IDENT    // and, or, piece, attack, mate, etc.
-	NUMBER   // 0, 1, 42, 2500
-	STRING   // "Carlsen"
-	PIECE    // K, Q, R, B, N, P, k, q, r, b, n, p, A, a, _, ?
-	PIECESET // [RQ], [RBN], etc.
-	SQUARE   // a1, e4, h8, .
+	IDENT     // and, or, piece, attack, mate, etc.
+	NUMBER    // 0, 1, 42, 2500
+	STRING    // "Carlsen"
+	PIECE     // K, Q, R, B, N, P, k, q, r, b, n, p, A, a, _, ?
+	PIECESET  // [RQ], [RBN], etc.
+	SQUARE    // a1, e4, h8, .
 	SQUARESET // [a-h]1, a[1-8], [a-d][1-4]
 
 	// Operators

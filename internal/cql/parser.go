@@ -273,13 +273,13 @@ func isFilterName(name string) bool {
 		"controls":        true,
 		"power":           true,
 		// Direction keywords for ray
-		"horizontal":      true,
-		"vertical":        true,
-		"diagonal":        true,
-		"orthogonal":      true,
+		"horizontal": true,
+		"vertical":   true,
+		"diagonal":   true,
+		"orthogonal": true,
 		// Color keywords for elo
-		"white":           true,
-		"black":           true,
+		"white": true,
+		"black": true,
 	}
 	return filters[name]
 }
@@ -287,12 +287,12 @@ func isFilterName(name string) bool {
 // isZeroArgFilter returns true if the filter takes no arguments.
 func isZeroArgFilter(name string) bool {
 	zeroArg := map[string]bool{
-		"check":      true,
-		"mate":       true,
-		"stalemate":  true,
-		"wtm":        true,
-		"btm":        true,
-		"year":       true,
+		"check":     true,
+		"mate":      true,
+		"stalemate": true,
+		"wtm":       true,
+		"btm":       true,
+		"year":      true,
 		// Direction keywords are zero-arg identifiers used as arguments
 		"horizontal": true,
 		"vertical":   true,

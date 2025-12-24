@@ -8,10 +8,10 @@ import (
 
 func TestNewBoardFromFEN(t *testing.T) {
 	tests := []struct {
-		name     string
-		fen      string
-		wantErr  bool
-		checkFn  func(*chess.Board) bool
+		name    string
+		fen     string
+		wantErr bool
+		checkFn func(*chess.Board) bool
 	}{
 		{
 			name:    "initial position",

@@ -19,10 +19,10 @@ type ProcessResult struct {
 	Game         *chess.Game
 	Index        int
 	Matched      bool
-	Board        *chess.Board  // Final board position (may be nil)
-	GameInfo     interface{}   // GameAnalysis or similar (may be nil)
-	ShouldOutput bool          // Whether to output this game
-	OutputToDup  bool          // Whether to output to duplicate file
+	Board        *chess.Board // Final board position (may be nil)
+	GameInfo     interface{}  // GameAnalysis or similar (may be nil)
+	ShouldOutput bool         // Whether to output this game
+	OutputToDup  bool         // Whether to output to duplicate file
 	Error        error
 }
 

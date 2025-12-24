@@ -303,11 +303,11 @@ func TestParserSquareRange(t *testing.T) {
 
 func TestParserErrors(t *testing.T) {
 	tests := []string{
-		"(",          // Unclosed paren
-		"(and",       // Unclosed paren with content
-		"(and mate",  // Unclosed nested
-		")",          // Unexpected close paren
-		"(and )",     // Empty logical
+		"(",         // Unclosed paren
+		"(and",      // Unclosed paren with content
+		"(and mate", // Unclosed nested
+		")",         // Unexpected close paren
+		"(and )",    // Empty logical
 	}
 
 	for _, input := range tests {

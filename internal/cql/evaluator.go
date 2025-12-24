@@ -467,7 +467,7 @@ func (e *Evaluator) evalMaterial(args []Node) int {
 				material += 5
 			case chess.Queen:
 				material += 9
-			// King has no material value
+				// King has no material value
 			}
 		}
 	}

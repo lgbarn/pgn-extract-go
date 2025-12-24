@@ -20,9 +20,9 @@ const (
 	OpLessOrEqual
 	OpGreaterThan
 	OpGreaterOrEqual
-	OpContains     // substring match
-	OpRegex        // regex match
-	OpSoundex      // soundex match for names
+	OpContains // substring match
+	OpRegex    // regex match
+	OpSoundex  // soundex match for names
 )
 
 // TagCriterion represents a single tag matching criterion.

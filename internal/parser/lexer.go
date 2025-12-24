@@ -13,15 +13,15 @@ import (
 
 // Lexer tokenizes PGN input.
 type Lexer struct {
-	reader     *bufio.Reader
-	line       string
-	pos        int
-	lineNum    uint
-	ravLevel   uint
-	lastMove   string
-	currentCh  byte
-	eof        bool
-	cfg        *config.Config
+	reader    *bufio.Reader
+	line      string
+	pos       int
+	lineNum   uint
+	ravLevel  uint
+	lastMove  string
+	currentCh byte
+	eof       bool
+	cfg       *config.Config
 
 	// Comment nesting depth
 	commentDepth uint

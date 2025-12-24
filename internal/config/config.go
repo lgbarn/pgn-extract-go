@@ -38,16 +38,16 @@ const (
 type TagOutputForm int
 
 const (
-	AllTags         TagOutputForm = 0
-	SevenTagRoster  TagOutputForm = 1
-	NoTags          TagOutputForm = 2
+	AllTags        TagOutputForm = 0
+	SevenTagRoster TagOutputForm = 1
+	NoTags         TagOutputForm = 2
 )
 
 // SetupOutputStatus specifies how to handle games with Setup tags.
 type SetupOutputStatus int
 
 const (
-	SetupTagOK   SetupOutputStatus = iota
+	SetupTagOK SetupOutputStatus = iota
 	NoSetupTag
 	SetupTagOnly
 )
@@ -77,14 +77,14 @@ type Config struct {
 	Verbosity           int // 0=nothing, 1=game count, 2=running commentary
 
 	// Content filtering
-	KeepNAGs             bool
-	KeepComments         bool
-	KeepVariations       bool
+	KeepNAGs              bool
+	KeepComments          bool
+	KeepVariations        bool
 	StripClockAnnotations bool
-	TagOutputFormat      TagOutputForm
-	MatchPermutations    bool
-	PositionalVariations bool
-	UseSoundex           bool
+	TagOutputFormat       TagOutputForm
+	MatchPermutations     bool
+	PositionalVariations  bool
+	UseSoundex            bool
 
 	// Duplicate handling
 	SuppressDuplicates   bool
@@ -115,12 +115,12 @@ type Config struct {
 	OutputPlyLimit  int
 
 	// Match conditions
-	MatchOnlyCheckmate     bool
-	MatchOnlyStalemate     bool
-	MatchUnderpromotion    bool
-	CheckForRepetition     bool
-	CheckForFiftyMoveRule  bool
-	TagMatchAnywhere       bool
+	MatchOnlyCheckmate    bool
+	MatchOnlyStalemate    bool
+	MatchUnderpromotion   bool
+	CheckForRepetition    bool
+	CheckForFiftyMoveRule bool
+	TagMatchAnywhere      bool
 
 	// Output options
 	KeepMoveNumbers         bool
@@ -148,25 +148,25 @@ type Config struct {
 	StartPly      uint
 
 	// FEN options
-	OutputFENString        bool
-	AddFENComments         bool
-	AddHashcodeComments    bool
-	AddPositionMatchComments bool
-	OutputPlycount         bool
-	OutputTotalPlycount    bool
-	AddHashcodeTag         bool
-	FixResultTags          bool
-	FixTagStrings          bool
-	AddFENCastling         bool
-	SeparateCommentLines   bool
-	SplitVariants          bool
+	OutputFENString           bool
+	AddFENComments            bool
+	AddHashcodeComments       bool
+	AddPositionMatchComments  bool
+	OutputPlycount            bool
+	OutputTotalPlycount       bool
+	AddHashcodeTag            bool
+	FixResultTags             bool
+	FixTagStrings             bool
+	AddFENCastling            bool
+	SeparateCommentLines      bool
+	SplitVariants             bool
 	RejectInconsistentResults bool
-	AllowNullMoves         bool
-	AllowNestedComments    bool
-	AddMatchTag            bool
-	AddMatchLabelTag       bool
-	OnlyOutputWantedTags   bool
-	DeleteSameSetup        bool
+	AllowNullMoves            bool
+	AllowNestedComments       bool
+	AddMatchTag               bool
+	AddMatchLabelTag          bool
+	OnlyOutputWantedTags      bool
+	DeleteSameSetup           bool
 
 	// Split depth limit (0 = no limit)
 	SplitDepthLimit uint
@@ -198,10 +198,10 @@ type Config struct {
 	NonMatchingFile io.Writer
 
 	// Game number selection
-	MatchingGameNumbers     *GameNumber
-	NextGameNumberToOutput  *GameNumber
-	SkipGameNumbers         *GameNumber
-	NextGameNumberToSkip    *GameNumber
+	MatchingGameNumbers    *GameNumber
+	NextGameNumberToOutput *GameNumber
+	SkipGameNumbers        *GameNumber
+	NextGameNumberToSkip   *GameNumber
 }
 
 // GlobalConfig is the global configuration instance.

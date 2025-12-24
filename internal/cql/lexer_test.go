@@ -251,10 +251,10 @@ func TestLexerComplexExpressions(t *testing.T) {
 func TestLexerWhitespace(t *testing.T) {
 	// Various whitespace should be skipped
 	inputs := []string{
-		"piece  K  e1",     // extra spaces
-		"piece\tK\te1",     // tabs
-		"piece\nK\ne1",     // newlines
-		"  piece K e1  ",   // leading/trailing
+		"piece  K  e1",   // extra spaces
+		"piece\tK\te1",   // tabs
+		"piece\nK\ne1",   // newlines
+		"  piece K e1  ", // leading/trailing
 	}
 
 	for _, input := range inputs {

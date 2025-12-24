@@ -89,9 +89,9 @@ func NewToken(tokenType TokenType) *Token {
 
 // Russian piece letter constants (for international support).
 const (
-	RussianKnightOrKing      = 0xcb // King and Knight
-	RussianKingSecondLetter  = 0xf0 // King (second character)
-	RussianQueen             = 0xc6 // Queen
-	RussianRook              = 0xcc // Rook
-	RussianBishop            = 0xd3 // Bishop
+	RussianKnightOrKing     = 0xcb // King and Knight
+	RussianKingSecondLetter = 0xf0 // King (second character)
+	RussianQueen            = 0xc6 // Queen
+	RussianRook             = 0xcc // Rook
+	RussianBishop           = 0xd3 // Bishop
 )

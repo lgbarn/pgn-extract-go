@@ -195,7 +195,7 @@ func TestPoolNumWorkers(t *testing.T) {
 	}{
 		{4, 4},
 		{1, 1},
-		{0, 1}, // Should default to 1
+		{0, 1},  // Should default to 1
 		{-1, 1}, // Should default to 1
 	}
 

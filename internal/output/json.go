@@ -21,19 +21,19 @@ type JSONGame struct {
 
 // JSONMove represents a move in JSON format.
 type JSONMove struct {
-	MoveNumber int           `json:"moveNumber,omitempty"`
-	Color      string        `json:"color"` // "white" or "black"
-	SAN        string        `json:"san"`
-	UCI        string        `json:"uci,omitempty"`
-	From       string        `json:"from,omitempty"`
-	To         string        `json:"to,omitempty"`
-	Piece      string        `json:"piece,omitempty"`
-	Captured   string        `json:"captured,omitempty"`
-	Promotion  string        `json:"promotion,omitempty"`
-	NAGs       []string      `json:"nags,omitempty"`
-	Comments   []string      `json:"comments,omitempty"`
-	Variations [][]JSONMove  `json:"variations,omitempty"`
-	FEN        string        `json:"fen,omitempty"`
+	MoveNumber int          `json:"moveNumber,omitempty"`
+	Color      string       `json:"color"` // "white" or "black"
+	SAN        string       `json:"san"`
+	UCI        string       `json:"uci,omitempty"`
+	From       string       `json:"from,omitempty"`
+	To         string       `json:"to,omitempty"`
+	Piece      string       `json:"piece,omitempty"`
+	Captured   string       `json:"captured,omitempty"`
+	Promotion  string       `json:"promotion,omitempty"`
+	NAGs       []string     `json:"nags,omitempty"`
+	Comments   []string     `json:"comments,omitempty"`
+	Variations [][]JSONMove `json:"variations,omitempty"`
+	FEN        string       `json:"fen,omitempty"`
 }
 
 // JSONOutput holds multiple games for array output.

@@ -19,7 +19,7 @@ func TestSoundex(t *testing.T) {
 		{"Carlsen", "Carlson", true},
 		{"Fischer", "Kasparov", false},
 		{"Smith", "Smyth", true},
-		{"Robert", "Rupert", true},   // Same soundex (R163)
+		{"Robert", "Rupert", true}, // Same soundex (R163)
 	}
 
 	for _, tt := range tests {
