@@ -17,9 +17,10 @@ type Parser struct {
 }
 
 // NewParser creates a new parser for the given reader.
+// If cfg is nil, a default config is created.
 func NewParser(r io.Reader, cfg *config.Config) *Parser {
 	if cfg == nil {
-		cfg = config.GlobalConfig
+		cfg = config.NewConfig()
 	}
 	return &Parser{
 		lexer: NewLexer(r, cfg),

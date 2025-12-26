@@ -293,3 +293,88 @@ func TestPoolNoRace(t *testing.T) {
 		t.Errorf("Expected 100 processed, got %d", counter)
 	}
 }
+
+// TestNewPoolWithOptions tests the functional options constructor.
+func TestNewPoolWithOptions(t *testing.T) {
+	processFunc := func(item WorkItem) ProcessResult {
+		return ProcessResult{Game: item.Game, Index: item.Index, Matched: true}
+	}
+
+	t.Run("defaults", func(t *testing.T) {
+		pool := NewPoolWithOptions(processFunc)
+		if pool.NumWorkers() != 1 {
+			t.Errorf("default workers = %d; want 1", pool.NumWorkers())
+		}
+		if pool.bufferSize != 10 {
+			t.Errorf("default bufferSize = %d; want 10", pool.bufferSize)
+		}
+	})
+
+	t.Run("with workers", func(t *testing.T) {
+		pool := NewPoolWithOptions(processFunc, WithWorkers(4))
+		if pool.NumWorkers() != 4 {
+			t.Errorf("NumWorkers() = %d; want 4", pool.NumWorkers())
+		}
+	})
+
+	t.Run("with buffer size", func(t *testing.T) {
+		pool := NewPoolWithOptions(processFunc, WithBufferSize(50))
+		if pool.bufferSize != 50 {
+			t.Errorf("bufferSize = %d; want 50", pool.bufferSize)
+		}
+	})
+
+	t.Run("with multiple options", func(t *testing.T) {
+		pool := NewPoolWithOptions(processFunc,
+			WithWorkers(8),
+			WithBufferSize(100),
+		)
+		if pool.NumWorkers() != 8 {
+			t.Errorf("NumWorkers() = %d; want 8", pool.NumWorkers())
+		}
+		if pool.bufferSize != 100 {
+			t.Errorf("bufferSize = %d; want 100", pool.bufferSize)
+		}
+	})
+
+	t.Run("invalid workers ignored", func(t *testing.T) {
+		pool := NewPoolWithOptions(processFunc, WithWorkers(0))
+		if pool.NumWorkers() != 1 {
+			t.Errorf("NumWorkers() = %d; want 1 (default)", pool.NumWorkers())
+		}
+	})
+
+	t.Run("invalid buffer size ignored", func(t *testing.T) {
+		pool := NewPoolWithOptions(processFunc, WithBufferSize(-5))
+		if pool.bufferSize != 10 {
+			t.Errorf("bufferSize = %d; want 10 (default)", pool.bufferSize)
+		}
+	})
+
+	t.Run("functional with options", func(t *testing.T) {
+		var processed int32
+		countFunc := func(item WorkItem) ProcessResult {
+			atomic.AddInt32(&processed, 1)
+			return ProcessResult{Game: item.Game, Index: item.Index}
+		}
+
+		pool := NewPoolWithOptions(countFunc,
+			WithWorkers(2),
+			WithBufferSize(5),
+		)
+		pool.Start()
+
+		for i := 0; i < 5; i++ {
+			pool.Submit(WorkItem{Game: &chess.Game{}, Index: i})
+		}
+
+		go pool.Close()
+
+		for range pool.Results() {
+		}
+
+		if atomic.LoadInt32(&processed) != 5 {
+			t.Errorf("processed = %d; want 5", processed)
+		}
+	})
+}

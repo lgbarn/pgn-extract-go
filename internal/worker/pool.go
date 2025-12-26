@@ -57,11 +57,33 @@ type ProcessFunc func(item WorkItem) ProcessResult
 // Pool manages a pool of workers for parallel game processing.
 type Pool struct {
 	numWorkers  int
+	bufferSize  int
 	workChan    chan WorkItem
 	resultChan  chan ProcessResult
 	processFunc ProcessFunc
 	wg          sync.WaitGroup
 	stopFlag    int32 // Atomic flag for early termination
+}
+
+// PoolOption configures a Pool.
+type PoolOption func(*Pool)
+
+// WithWorkers sets the number of worker goroutines.
+func WithWorkers(n int) PoolOption {
+	return func(p *Pool) {
+		if n >= 1 {
+			p.numWorkers = n
+		}
+	}
+}
+
+// WithBufferSize sets the channel buffer size.
+func WithBufferSize(size int) PoolOption {
+	return func(p *Pool) {
+		if size >= 1 {
+			p.bufferSize = size
+		}
+	}
 }
 
 // NewPool creates a new worker pool.
@@ -77,10 +99,29 @@ func NewPool(numWorkers int, bufferSize int, processFunc ProcessFunc) *Pool {
 	}
 	return &Pool{
 		numWorkers:  numWorkers,
+		bufferSize:  bufferSize,
 		workChan:    make(chan WorkItem, bufferSize),
 		resultChan:  make(chan ProcessResult, bufferSize),
 		processFunc: processFunc,
 	}
+}
+
+// NewPoolWithOptions creates a new worker pool using functional options.
+// processFunc is required; other settings have sensible defaults.
+// Default: 1 worker, buffer size of 10.
+func NewPoolWithOptions(processFunc ProcessFunc, opts ...PoolOption) *Pool {
+	p := &Pool{
+		numWorkers:  1,
+		bufferSize:  10,
+		processFunc: processFunc,
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	// Create channels after options are applied
+	p.workChan = make(chan WorkItem, p.bufferSize)
+	p.resultChan = make(chan ProcessResult, p.bufferSize)
+	return p
 }
 
 // Start starts the worker goroutines.

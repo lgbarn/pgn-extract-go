@@ -1,12 +1,10 @@
 package matching
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
-	"github.com/lgbarn/pgn-extract-go/internal/config"
-	"github.com/lgbarn/pgn-extract-go/internal/parser"
+	"github.com/lgbarn/pgn-extract-go/internal/testutil"
 )
 
 func TestSoundex(t *testing.T) {
@@ -139,7 +137,7 @@ func TestTagMatcherPlayer(t *testing.T) {
 }
 
 func TestGameFilter(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "World Championship"]
 [Site "Reykjavik"]
 [Date "1972.07.11"]
@@ -196,7 +194,7 @@ func TestParseCriterion(t *testing.T) {
 }
 
 func TestPositionMatcher(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -230,7 +228,7 @@ func TestGameMatcherInterface(t *testing.T) {
 
 // TestCompositeMatcher_And verifies AND mode (all matchers must match)
 func TestCompositeMatcher_And(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -268,7 +266,7 @@ func TestCompositeMatcher_And(t *testing.T) {
 
 // TestCompositeMatcher_Or verifies OR mode (any matcher must match)
 func TestCompositeMatcher_Or(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -318,7 +316,7 @@ func TestCompositeMatcher_Name(t *testing.T) {
 
 // TestCompositeMatcher_Empty verifies empty composite behavior
 func TestCompositeMatcher_Empty(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -367,13 +365,3 @@ func TestVariationMatcher_Name(t *testing.T) {
 	}
 }
 
-func parseTestGame(pgn string) *chess.Game {
-	cfg := config.NewConfig()
-	cfg.Verbosity = 0
-	p := parser.NewParser(strings.NewReader(pgn), cfg)
-	games, _ := p.ParseAllGames()
-	if len(games) > 0 {
-		return games[0]
-	}
-	return nil
-}

@@ -5,25 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lgbarn/pgn-extract-go/internal/chess"
 	"github.com/lgbarn/pgn-extract-go/internal/config"
-	"github.com/lgbarn/pgn-extract-go/internal/parser"
+	"github.com/lgbarn/pgn-extract-go/internal/testutil"
 )
-
-func parseTestGame(pgn string) *chess.Game {
-	cfg := config.NewConfig()
-	cfg.Verbosity = 0
-	p := parser.NewParser(strings.NewReader(pgn), cfg)
-	games, _ := p.ParseAllGames()
-	if len(games) > 0 {
-		return games[0]
-	}
-	return nil
-}
 
 // TestPGNWriter_WriteGame verifies PGN writer outputs correct format
 func TestPGNWriter_WriteGame(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -64,7 +52,7 @@ func TestPGNWriter_WriteGame(t *testing.T) {
 
 // TestJSONWriter_WriteGame verifies JSON writer outputs correct format
 func TestJSONWriter_WriteGame(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -131,7 +119,7 @@ func TestPGNWriter_Close(t *testing.T) {
 
 // TestJSONWriter_Close verifies Close flushes pending games
 func TestJSONWriter_Close(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]

@@ -146,9 +146,10 @@ func initLexTables() {
 }
 
 // NewLexer creates a new lexer for the given reader.
+// If cfg is nil, a default config is created.
 func NewLexer(r io.Reader, cfg *config.Config) *Lexer {
 	if cfg == nil {
-		cfg = config.GlobalConfig
+		cfg = config.NewConfig()
 	}
 	return &Lexer{
 		reader:  bufio.NewReader(r),

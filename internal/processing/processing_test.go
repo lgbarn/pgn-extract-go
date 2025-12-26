@@ -1,28 +1,15 @@
 package processing
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
-	"github.com/lgbarn/pgn-extract-go/internal/config"
-	"github.com/lgbarn/pgn-extract-go/internal/parser"
+	"github.com/lgbarn/pgn-extract-go/internal/testutil"
 )
-
-func parseTestGame(pgn string) *chess.Game {
-	cfg := config.NewConfig()
-	cfg.Verbosity = 0
-	p := parser.NewParser(strings.NewReader(pgn), cfg)
-	games, _ := p.ParseAllGames()
-	if len(games) > 0 {
-		return games[0]
-	}
-	return nil
-}
 
 // TestAnalyzeGame verifies game analysis functionality
 func TestAnalyzeGame(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -50,7 +37,7 @@ func TestAnalyzeGame(t *testing.T) {
 // TestAnalyzeGame_Repetition verifies repetition detection
 func TestAnalyzeGame_Repetition(t *testing.T) {
 	// A game with threefold repetition
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -74,7 +61,7 @@ func TestAnalyzeGame_Repetition(t *testing.T) {
 
 // TestAnalyzeGame_Underpromotion verifies underpromotion detection
 func TestAnalyzeGame_Underpromotion(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -98,7 +85,7 @@ func TestAnalyzeGame_Underpromotion(t *testing.T) {
 
 // TestValidateGame verifies game validation
 func TestValidateGame(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -122,7 +109,7 @@ func TestValidateGame(t *testing.T) {
 
 // TestCountPlies verifies ply counting
 func TestCountPlies(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -145,7 +132,7 @@ func TestCountPlies(t *testing.T) {
 
 // TestReplayGame verifies game replay returns final position
 func TestReplayGame(t *testing.T) {
-	game := parseTestGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]

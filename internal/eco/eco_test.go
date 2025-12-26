@@ -5,9 +5,8 @@ import (
 	"testing"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
-	"github.com/lgbarn/pgn-extract-go/internal/config"
 	"github.com/lgbarn/pgn-extract-go/internal/engine"
-	"github.com/lgbarn/pgn-extract-go/internal/parser"
+	"github.com/lgbarn/pgn-extract-go/internal/testutil"
 )
 
 const testECOData = `
@@ -46,7 +45,7 @@ func TestECOClassifySicilian(t *testing.T) {
 	ec.LoadFromReader(strings.NewReader(testECOData))
 
 	// Create a game with Sicilian Najdorf moves
-	game := parseGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -78,7 +77,7 @@ func TestECOClassifyItalian(t *testing.T) {
 	ec := NewECOClassifier()
 	ec.LoadFromReader(strings.NewReader(testECOData))
 
-	game := parseGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -107,7 +106,7 @@ func TestECOAddTags(t *testing.T) {
 	ec := NewECOClassifier()
 	ec.LoadFromReader(strings.NewReader(testECOData))
 
-	game := parseGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -146,7 +145,7 @@ func TestECONoMatch(t *testing.T) {
 	ec.LoadFromReader(strings.NewReader(testECOData))
 
 	// A game that doesn't match any ECO entry
-	game := parseGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -169,7 +168,7 @@ func TestECOPartialMatch(t *testing.T) {
 	ec.LoadFromReader(strings.NewReader(testECOData))
 
 	// A game that goes beyond the ECO position
-	game := parseGame(`
+	game := testutil.ParseTestGame(`
 [Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
@@ -191,17 +190,6 @@ func TestECOPartialMatch(t *testing.T) {
 	}
 }
 
-// Helper function to parse a PGN string into a game
-func parseGame(pgn string) *chess.Game {
-	cfg := config.NewConfig()
-	cfg.Verbosity = 0
-	p := parser.NewParser(strings.NewReader(pgn), cfg)
-	games, _ := p.ParseAllGames()
-	if len(games) > 0 {
-		return games[0]
-	}
-	return nil
-}
 
 // Verify board setup works correctly
 func TestBoardSetup(t *testing.T) {
