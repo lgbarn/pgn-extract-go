@@ -1,0 +1,115 @@
+# Pre-commit configuration for pgn-extract-go
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run -a
+# Update hooks: pre-commit autoupdate
+
+minimum_pre_commit_version: "2.20.0"
+
+default_stages: [pre-commit]
+fail_fast: false
+
+repos:
+  # ===========================================================================
+  # General file checks
+  # ===========================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+        exclude: "^testdata/"
+
+      - id: check-case-conflict
+
+      - id: check-merge-conflict
+
+      - id: end-of-file-fixer
+        exclude: "^testdata/"
+
+      - id: trailing-whitespace
+        exclude: "^testdata/"
+
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+
+      - id: check-json
+        exclude: "^testdata/"
+
+      - id: detect-private-key
+
+      - id: check-symlinks
+
+      - id: check-executables-have-shebangs
+
+      # Prevent commits directly to main/master
+      - id: no-commit-to-branch
+        args: ["--branch", "main", "--branch", "master"]
+
+  # ===========================================================================
+  # Go checks (using just recipes)
+  # ===========================================================================
+  - repo: local
+    hooks:
+      # Format Go code
+      - id: go-fmt
+        name: go fmt
+        entry: just fmt
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      # Run go vet
+      - id: go-vet
+        name: go vet
+        entry: just lint
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      # Check go.mod is tidy
+      - id: go-mod-tidy
+        name: go mod tidy
+        entry: just tidy
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      # Run staticcheck (if installed)
+      - id: staticcheck
+        name: staticcheck
+        entry: just staticcheck
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      # Run golangci-lint (if installed)
+      - id: golangci-lint
+        name: golangci-lint
+        entry: just golangci-lint
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      # Verify the project builds
+      - id: go-build
+        name: go build
+        entry: just build
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      # Run quick tests
+      - id: go-test
+        name: go test
+        entry: just test
+        language: system
+        types: [go]
+        pass_filenames: false
+
+  # ===========================================================================
+  # Shell script linting
+  # ===========================================================================
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck

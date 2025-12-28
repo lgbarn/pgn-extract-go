@@ -364,4 +364,3 @@ func TestVariationMatcher_Name(t *testing.T) {
 		t.Errorf("VariationMatcher.Name() = %s, want VariationMatcher", matcher.Name())
 	}
 }
-

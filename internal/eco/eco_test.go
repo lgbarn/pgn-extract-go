@@ -190,7 +190,6 @@ func TestECOPartialMatch(t *testing.T) {
 	}
 }
 
-
 // Verify board setup works correctly
 func TestBoardSetup(t *testing.T) {
 	board, err := engine.NewBoardFromFEN(engine.InitialFEN)

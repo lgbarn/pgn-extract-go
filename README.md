@@ -16,6 +16,7 @@ pgn-extract-go is a complete rewrite of David J. Barnes' pgn-extract tool from C
 ## Features
 
 ### Filtering & Matching
+
 - Filter by player name (with optional Soundex fuzzy matching)
 - Filter by ECO code prefix
 - Filter by game result
@@ -27,7 +28,9 @@ pgn-extract-go is a complete rewrite of David J. Barnes' pgn-extract tool from C
 - Ply and move count bounds
 
 ### Chess Query Language (CQL)
+
 Full CQL implementation for advanced position pattern matching:
+
 - Piece placement queries (`piece K g1`)
 - Attack detection (`attack R k`)
 - Position transformations (flip, mirror, shift)
@@ -38,12 +41,14 @@ Full CQL implementation for advanced position pattern matching:
 See [docs/CQL.md](docs/CQL.md) for complete CQL documentation.
 
 ### Output Formats
+
 - **PGN** - Standard Portable Game Notation
 - **JSON** - Structured JSON format
 - **EPD** - Extended Position Description
 - **FEN** - Forsyth-Edwards Notation sequence
 
 ### Move Notation Formats
+
 - SAN - Standard Algebraic Notation (default)
 - LALG - Long Algebraic (e2e4)
 - HALG - Hyphenated Long Algebraic (e2-e4)
@@ -51,12 +56,14 @@ See [docs/CQL.md](docs/CQL.md) for complete CQL documentation.
 - UCI - Universal Chess Interface format
 
 ### Duplicate Detection
+
 - Move sequence hashing
 - Zobrist position hashing
 - Configurable output for duplicates vs. unique games
 - Check file support for cross-database deduplication
 
 ### Game Validation & Fixing
+
 - Strict mode for PGN compliance
 - Move legality validation
 - Automatic fixing of common issues (missing tags, invalid results, date formats)

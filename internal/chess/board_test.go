@@ -179,7 +179,7 @@ func TestBoardGetByIndexSetByIndex(t *testing.T) {
 	b := NewBoard()
 
 	// Set a piece using array indices (remember hedge offset)
-	col := Hedge + 4 // 'e' column
+	col := Hedge + 4  // 'e' column
 	rank := Hedge + 3 // rank 4
 	b.SetByIndex(col, rank, W(Knight))
 

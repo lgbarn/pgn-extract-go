@@ -190,11 +190,11 @@ func TestApplyMove_PawnMoves(t *testing.T) {
 			name: "pawn capture",
 			fen:  "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2",
 			move: &chess.Move{
-				Class:    chess.PawnMove,
-				FromCol:  'e',
-				FromRank: '4',
-				ToCol:    'd',
-				ToRank:   '5',
+				Class:         chess.PawnMove,
+				FromCol:       'e',
+				FromRank:      '4',
+				ToCol:         'd',
+				ToRank:        '5',
 				CapturedPiece: chess.Pawn,
 			},
 			wantOk: true,
@@ -236,11 +236,11 @@ func TestApplyMove_EnPassant(t *testing.T) {
 			name: "white en passant capture",
 			fen:  "rnbqkbnr/pppp1ppp/8/4pP2/8/8/PPPPP1PP/RNBQKBNR w KQkq e6 0 3",
 			move: &chess.Move{
-				Class:    chess.EnPassantPawnMove,
-				FromCol:  'f',
-				FromRank: '5',
-				ToCol:    'e',
-				ToRank:   '6',
+				Class:         chess.EnPassantPawnMove,
+				FromCol:       'f',
+				FromRank:      '5',
+				ToCol:         'e',
+				ToRank:        '6',
 				CapturedPiece: chess.Pawn,
 			},
 			wantOk: true,
@@ -254,11 +254,11 @@ func TestApplyMove_EnPassant(t *testing.T) {
 			name: "black en passant capture",
 			fen:  "rnbqkbnr/ppppp1pp/8/8/4Pp2/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 3",
 			move: &chess.Move{
-				Class:    chess.EnPassantPawnMove,
-				FromCol:  'f',
-				FromRank: '4',
-				ToCol:    'e',
-				ToRank:   '3',
+				Class:         chess.EnPassantPawnMove,
+				FromCol:       'f',
+				FromRank:      '4',
+				ToCol:         'e',
+				ToRank:        '3',
 				CapturedPiece: chess.Pawn,
 			},
 			wantOk: true,
@@ -296,68 +296,83 @@ func TestApplyMove_Promotion(t *testing.T) {
 		move       *chess.Move
 		wantOk     bool
 		wantPiece  chess.Piece
-		wantSquare struct{ col chess.Col; rank chess.Rank }
+		wantSquare struct {
+			col  chess.Col
+			rank chess.Rank
+		}
 	}{
 		{
 			name: "white pawn promotes to queen",
 			fen:  "8/P7/8/8/8/8/8/4K2k w - - 0 1",
 			move: &chess.Move{
-				Class:      chess.PawnMoveWithPromotion,
-				FromCol:    'a',
-				FromRank:   '7',
-				ToCol:      'a',
-				ToRank:     '8',
+				Class:         chess.PawnMoveWithPromotion,
+				FromCol:       'a',
+				FromRank:      '7',
+				ToCol:         'a',
+				ToRank:        '8',
 				PromotedPiece: chess.Queen,
 			},
-			wantOk:     true,
-			wantPiece:  chess.W(chess.Queen),
-			wantSquare: struct{ col chess.Col; rank chess.Rank }{'a', '8'},
+			wantOk:    true,
+			wantPiece: chess.W(chess.Queen),
+			wantSquare: struct {
+				col  chess.Col
+				rank chess.Rank
+			}{'a', '8'},
 		},
 		{
 			name: "white pawn promotes to knight",
 			fen:  "8/P7/8/8/8/8/8/4K2k w - - 0 1",
 			move: &chess.Move{
-				Class:      chess.PawnMoveWithPromotion,
-				FromCol:    'a',
-				FromRank:   '7',
-				ToCol:      'a',
-				ToRank:     '8',
+				Class:         chess.PawnMoveWithPromotion,
+				FromCol:       'a',
+				FromRank:      '7',
+				ToCol:         'a',
+				ToRank:        '8',
 				PromotedPiece: chess.Knight,
 			},
-			wantOk:     true,
-			wantPiece:  chess.W(chess.Knight),
-			wantSquare: struct{ col chess.Col; rank chess.Rank }{'a', '8'},
+			wantOk:    true,
+			wantPiece: chess.W(chess.Knight),
+			wantSquare: struct {
+				col  chess.Col
+				rank chess.Rank
+			}{'a', '8'},
 		},
 		{
 			name: "black pawn promotes to queen",
 			fen:  "4K2k/8/8/8/8/8/p7/8 b - - 0 1",
 			move: &chess.Move{
-				Class:      chess.PawnMoveWithPromotion,
-				FromCol:    'a',
-				FromRank:   '2',
-				ToCol:      'a',
-				ToRank:     '1',
+				Class:         chess.PawnMoveWithPromotion,
+				FromCol:       'a',
+				FromRank:      '2',
+				ToCol:         'a',
+				ToRank:        '1',
 				PromotedPiece: chess.Queen,
 			},
-			wantOk:     true,
-			wantPiece:  chess.B(chess.Queen),
-			wantSquare: struct{ col chess.Col; rank chess.Rank }{'a', '1'},
+			wantOk:    true,
+			wantPiece: chess.B(chess.Queen),
+			wantSquare: struct {
+				col  chess.Col
+				rank chess.Rank
+			}{'a', '1'},
 		},
 		{
 			name: "promotion with capture",
 			fen:  "1n6/P7/8/8/8/8/8/4K2k w - - 0 1",
 			move: &chess.Move{
-				Class:      chess.PawnMoveWithPromotion,
-				FromCol:    'a',
-				FromRank:   '7',
-				ToCol:      'b',
-				ToRank:     '8',
+				Class:         chess.PawnMoveWithPromotion,
+				FromCol:       'a',
+				FromRank:      '7',
+				ToCol:         'b',
+				ToRank:        '8',
 				PromotedPiece: chess.Queen,
 				CapturedPiece: chess.Knight,
 			},
-			wantOk:     true,
-			wantPiece:  chess.W(chess.Queen),
-			wantSquare: struct{ col chess.Col; rank chess.Rank }{'b', '8'},
+			wantOk:    true,
+			wantPiece: chess.W(chess.Queen),
+			wantSquare: struct {
+				col  chess.Col
+				rank chess.Rank
+			}{'b', '8'},
 		},
 	}
 
@@ -396,12 +411,12 @@ func TestApplyMove_PieceMoves(t *testing.T) {
 			name: "knight move Nf3",
 			fen:  InitialFEN,
 			move: &chess.Move{
-				Class:    chess.PieceMove,
+				Class:       chess.PieceMove,
 				PieceToMove: chess.Knight,
-				FromCol:  'g',
-				FromRank: '1',
-				ToCol:    'f',
-				ToRank:   '3',
+				FromCol:     'g',
+				FromRank:    '1',
+				ToCol:       'f',
+				ToRank:      '3',
 			},
 			wantOk: true,
 			checkFn: func(b *chess.Board) bool {
@@ -413,12 +428,12 @@ func TestApplyMove_PieceMoves(t *testing.T) {
 			name: "bishop move Bc4",
 			fen:  "rnbqkbnr/pppppppp/8/8/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 1 2",
 			move: &chess.Move{
-				Class:    chess.PieceMove,
+				Class:       chess.PieceMove,
 				PieceToMove: chess.Bishop,
-				FromCol:  'f',
-				FromRank: '1',
-				ToCol:    'c',
-				ToRank:   '4',
+				FromCol:     'f',
+				FromRank:    '1',
+				ToCol:       'c',
+				ToRank:      '4',
 			},
 			wantOk: true,
 			checkFn: func(b *chess.Board) bool {
@@ -430,12 +445,12 @@ func TestApplyMove_PieceMoves(t *testing.T) {
 			name: "rook move Ra3",
 			fen:  "r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1",
 			move: &chess.Move{
-				Class:    chess.PieceMove,
+				Class:       chess.PieceMove,
 				PieceToMove: chess.Rook,
-				FromCol:  'a',
-				FromRank: '1',
-				ToCol:    'a',
-				ToRank:   '3',
+				FromCol:     'a',
+				FromRank:    '1',
+				ToCol:       'a',
+				ToRank:      '3',
 			},
 			wantOk: true,
 			checkFn: func(b *chess.Board) bool {
@@ -447,12 +462,12 @@ func TestApplyMove_PieceMoves(t *testing.T) {
 			name: "queen move Qd4",
 			fen:  "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
 			move: &chess.Move{
-				Class:    chess.PieceMove,
+				Class:       chess.PieceMove,
 				PieceToMove: chess.Queen,
-				FromCol:  'd',
-				FromRank: '1',
-				ToCol:    'h',
-				ToRank:   '5',
+				FromCol:     'd',
+				FromRank:    '1',
+				ToCol:       'h',
+				ToRank:      '5',
 			},
 			wantOk: true,
 			checkFn: func(b *chess.Board) bool {
@@ -464,12 +479,12 @@ func TestApplyMove_PieceMoves(t *testing.T) {
 			name: "king move Kf1",
 			fen:  "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 2",
 			move: &chess.Move{
-				Class:    chess.PieceMove,
+				Class:       chess.PieceMove,
 				PieceToMove: chess.King,
-				FromCol:  'e',
-				FromRank: '1',
-				ToCol:    'f',
-				ToRank:   '1',
+				FromCol:     'e',
+				FromRank:    '1',
+				ToCol:       'f',
+				ToRank:      '1',
 			},
 			wantOk: true,
 			checkFn: func(b *chess.Board) bool {
