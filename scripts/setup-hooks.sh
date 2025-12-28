@@ -39,7 +39,7 @@ echo "     - No external dependencies"
 echo "     - Simpler setup"
 echo "     - Manual updates"
 echo ""
-read -p "Enter choice [1/2]: " CHOICE
+read -rp "Enter choice [1/2]: " CHOICE
 
 case $CHOICE in
     1)
@@ -76,7 +76,6 @@ case $CHOICE in
 
         # Create symlinks for hooks
         HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
-        SCRIPTS_DIR="$(dirname "$0")"
 
         # Pre-commit hook
         if [ -f "$HOOKS_DIR/pre-commit" ]; then
@@ -131,7 +130,7 @@ if [ ${#TOOLS_TO_INSTALL[@]} -gt 0 ]; then
         echo "  - $tool"
     done
     echo ""
-    read -p "Install missing tools? [y/N]: " INSTALL_TOOLS
+    read -rp "Install missing tools? [y/N]: " INSTALL_TOOLS
 
     if [[ "$INSTALL_TOOLS" =~ ^[Yy]$ ]]; then
         for tool in "${TOOLS_TO_INSTALL[@]}"; do

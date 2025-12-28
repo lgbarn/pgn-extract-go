@@ -21,6 +21,7 @@ NC='\033[0m' # No Color
 # Logging functions
 info() { echo -e "${BLUE}[INFO]${NC} $*"; }
 success() { echo -e "${GREEN}[PASS]${NC} $*"; }
+# shellcheck disable=SC2317  # warn may be used in future
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[FAIL]${NC} $*"; }
 

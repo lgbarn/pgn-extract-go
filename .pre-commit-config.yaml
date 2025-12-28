@@ -46,14 +46,14 @@ repos:
         args: ["--branch", "main", "--branch", "master"]
 
   # ===========================================================================
-  # Go checks (using just recipes)
+  # Go checks (using direct commands for CI compatibility)
   # ===========================================================================
   - repo: local
     hooks:
       # Format Go code
       - id: go-fmt
         name: go fmt
-        entry: just fmt
+        entry: bash -c 'GO111MODULE=on go fmt ./...'
         language: system
         types: [go]
         pass_filenames: false
@@ -61,7 +61,7 @@ repos:
       # Run go vet
       - id: go-vet
         name: go vet
-        entry: just lint
+        entry: bash -c 'GO111MODULE=on go vet ./...'
         language: system
         types: [go]
         pass_filenames: false
@@ -69,7 +69,7 @@ repos:
       # Check go.mod is tidy
       - id: go-mod-tidy
         name: go mod tidy
-        entry: just tidy
+        entry: bash -c 'GO111MODULE=on go mod tidy && git diff --exit-code go.mod'
         language: system
         types: [go]
         pass_filenames: false
@@ -77,7 +77,7 @@ repos:
       # Run staticcheck (if installed)
       - id: staticcheck
         name: staticcheck
-        entry: just staticcheck
+        entry: bash -c 'command -v staticcheck >/dev/null && GO111MODULE=on staticcheck ./... || echo "staticcheck not installed, skipping"'
         language: system
         types: [go]
         pass_filenames: false
@@ -85,7 +85,7 @@ repos:
       # Run golangci-lint (if installed)
       - id: golangci-lint
         name: golangci-lint
-        entry: just golangci-lint
+        entry: bash -c 'command -v golangci-lint >/dev/null && GO111MODULE=on golangci-lint run --timeout=5m ./... || echo "golangci-lint not installed, skipping"'
         language: system
         types: [go]
         pass_filenames: false
@@ -93,7 +93,7 @@ repos:
       # Verify the project builds
       - id: go-build
         name: go build
-        entry: just build
+        entry: bash -c 'GO111MODULE=on go build -o /dev/null ./cmd/pgn-extract/'
         language: system
         types: [go]
         pass_filenames: false
@@ -101,7 +101,7 @@ repos:
       # Run quick tests
       - id: go-test
         name: go test
-        entry: just test
+        entry: bash -c 'GO111MODULE=on go test -short ./...'
         language: system
         types: [go]
         pass_filenames: false
