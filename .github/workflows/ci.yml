@@ -129,12 +129,6 @@ jobs:
             go: "1.21"
           - os: windows-latest
             go: "1.22"
-        include:
-          # Windows tests have pre-existing path handling issues, make non-blocking
-          - os: windows-latest
-            go: "1.23"
-            experimental: true
-    continue-on-error: ${{ matrix.experimental || false }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

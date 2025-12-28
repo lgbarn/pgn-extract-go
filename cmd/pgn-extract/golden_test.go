@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -44,8 +45,12 @@ func buildTestBinary(t *testing.T) string {
 		t.Fatalf("Failed to get working directory: %v", err)
 	}
 
-	// Build the binary
-	binPath := filepath.Join(wd, "pgn-extract-test")
+	// Build the binary (add .exe suffix on Windows)
+	binName := "pgn-extract-test"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(wd, binName)
 	cmd := exec.Command("go", "build", "-o", binPath, ".")
 	cmd.Dir = wd
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
