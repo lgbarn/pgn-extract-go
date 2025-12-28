@@ -90,6 +90,10 @@ lint:
 staticcheck:
     GO111MODULE=on staticcheck ./... || echo "Install with: go install honnef.co/go/tools/cmd/staticcheck@latest"
 
+# Run golangci-lint if available
+golangci-lint:
+    GO111MODULE=on golangci-lint run --timeout=5m ./... || echo "Install: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin"
+
 # Run all checks (fmt, lint, test)
 check: fmt lint test
 

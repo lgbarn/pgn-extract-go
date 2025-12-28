@@ -543,6 +543,7 @@ pgn-extract-go -y "KP:kp" games.pgn
 ### Pattern Format
 
 Material patterns use `WhitePieces:BlackPieces` format:
+
 - `K` = King, `Q` = Queen, `R` = Rook, `B` = Bishop, `N` = Knight, `P` = Pawn
 - Use uppercase for White, lowercase for Black
 - Repeat letters for multiple pieces: `RR` = two rooks
@@ -580,6 +581,7 @@ pgn-extract-go -x setup.txt games.pgn
 ### File Format
 
 Move sequence files have one sequence per line:
+
 ```
 1. e4 e5 2. Nf3 Nc6
 1. d4 d5 2. c4
@@ -709,6 +711,7 @@ pgn-extract-go --strict games.pgn
 ```
 
 The Seven Tag Roster (required tags) are:
+
 - Event, Site, Date, Round, White, Black, Result
 
 Games missing any of these tags are skipped in strict mode.
@@ -723,6 +726,7 @@ pgn-extract-go --validate games.pgn
 ```
 
 This replays each game move-by-move and rejects games where any move is illegal according to chess rules. Useful for:
+
 - Cleaning databases with corrupted games
 - Verifying game integrity after format conversion
 - Filtering out games with OCR or transcription errors
@@ -737,6 +741,7 @@ pgn-extract-go --fixable games.pgn
 ```
 
 This fixes:
+
 - **Missing required tags**: Adds placeholder values (e.g., `[Event "?"]`)
 - **Invalid results**: Normalizes to standard format (1-0, 0-1, 1/2-1/2, *)
 - **Date format**: Converts `2024/01/15` or `2024-01-15` to `2024.01.15`
@@ -1123,6 +1128,7 @@ ls *.pgn | xargs -P 4 -I {} pgn-extract-go --checkmate {}
 ### Common Workflows
 
 **Building a training database:**
+
 ```bash
 # Get decisive games from strong players
 pgn-extract-go -D \
@@ -1131,12 +1137,14 @@ pgn-extract-go -D \
 ```
 
 **Preparing for opening study:**
+
 ```bash
 # Extract Sicilian Najdorf games
 pgn-extract-go -Te "B90" -e eco.pgn -o najdorf.pgn games.pgn
 ```
 
 **Quality control:**
+
 ```bash
 # Find potentially problematic games (ended in mate but result is draw)
 pgn-extract-go --checkmate -Tr "1/2-1/2" suspicious.pgn

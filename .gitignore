@@ -15,3 +15,21 @@ cmd/pgn-extract/pgn-extract-test
 # OS files
 .DS_Store
 Thumbs.db
+
+# Coverage reports
+coverage.out
+coverage.html
+coverage/
+
+# Pre-commit
+.secrets.baseline
+
+# Go build cache
+.cache/
+
+# Temporary test files
+*.test
+*.out
+
+# Docker artifacts
+.docker/
