@@ -77,10 +77,10 @@ echo ""
 # =============================================================================
 info "Running go fmt..."
 
-UNFMT_FILES=$(gofmt -l $STAGED_GO_FILES 2>&1 || true)
+UNFMT_FILES=$(gofmt -l "$STAGED_GO_FILES" 2>&1 || true)
 if [ -n "$UNFMT_FILES" ]; then
     error "The following files need formatting:"
-    echo "$UNFMT_FILES" | sed 's/^/  /'
+    echo "$UNFMT_FILES" | while read -r line; do echo "  $line"; done
     echo ""
     echo "Run: gofmt -w \$(git diff --cached --name-only | grep '\\.go\$')"
     FAILED=1
