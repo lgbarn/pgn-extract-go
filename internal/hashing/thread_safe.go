@@ -7,8 +7,7 @@ import (
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
 )
 
-// ThreadSafeDuplicateDetector wraps DuplicateDetector with mutex protection
-// for concurrent access from multiple goroutines.
+// ThreadSafeDuplicateDetector wraps DuplicateDetector with mutex protection for concurrent access.
 type ThreadSafeDuplicateDetector struct {
 	detector *DuplicateDetector
 	mu       sync.RWMutex
@@ -21,34 +20,31 @@ func NewThreadSafeDuplicateDetector(exactMatch bool) *ThreadSafeDuplicateDetecto
 	}
 }
 
-// CheckAndAdd checks if a game is a duplicate and adds it to the hash table atomically.
-// Returns true if the game is a duplicate.
+// CheckAndAdd atomically checks if a game is a duplicate and adds it to the hash table.
 func (d *ThreadSafeDuplicateDetector) CheckAndAdd(game *chess.Game, board *chess.Board) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.detector.CheckAndAdd(game, board)
 }
 
-// DuplicateCount returns the current duplicate count.
+// DuplicateCount returns the number of duplicates detected.
 func (d *ThreadSafeDuplicateDetector) DuplicateCount() int {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.detector.DuplicateCount()
 }
 
-// UniqueCount returns the current unique game count.
+// UniqueCount returns the number of unique games.
 func (d *ThreadSafeDuplicateDetector) UniqueCount() int {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.detector.UniqueCount()
 }
 
-// LoadFromDetector copies entries from an existing detector (for checkFile support).
-// This should be called before concurrent use.
+// LoadFromDetector copies entries from an existing detector. Call before concurrent use.
 func (d *ThreadSafeDuplicateDetector) LoadFromDetector(other *DuplicateDetector) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	// Copy the hash table entries
 	for hash, sigs := range other.hashTable {
 		d.detector.hashTable[hash] = append(d.detector.hashTable[hash], sigs...)
 	}

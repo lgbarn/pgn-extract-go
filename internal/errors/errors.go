@@ -160,6 +160,5 @@ func Wrapf(err error, format string, args ...interface{}) error {
 	if err == nil {
 		return nil
 	}
-	context := fmt.Sprintf(format, args...)
-	return fmt.Errorf("%s: %w", context, err)
+	return Wrap(err, fmt.Sprintf(format, args...))
 }

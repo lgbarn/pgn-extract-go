@@ -40,20 +40,7 @@ func (e *Evaluator) evalAttackOnPiece(attackerDesig, targetDesig string) bool {
 	for rank := chess.Rank(0); rank < 8; rank++ {
 		for col := chess.Col(0); col < 8; col++ {
 			piece := e.getPieceAt(col, rank)
-			if piece == chess.Empty {
-				continue
-			}
-
-			// Is this a target piece?
-			isTarget := false
-			for _, tp := range targetPieces {
-				if piece == tp {
-					isTarget = true
-					break
-				}
-			}
-
-			if !isTarget {
+			if piece == chess.Empty || !containsPiece(targetPieces, piece) {
 				continue
 			}
 
@@ -87,20 +74,7 @@ func (e *Evaluator) isAttackedByPieces(targetCol chess.Col, targetRank chess.Ran
 	for rank := chess.Rank(0); rank < 8; rank++ {
 		for col := chess.Col(0); col < 8; col++ {
 			piece := e.getPieceAt(col, rank)
-			if piece == chess.Empty {
-				continue
-			}
-
-			// Is this one of the attacker pieces?
-			isAttacker := false
-			for _, ap := range attackerPieces {
-				if piece == ap {
-					isAttacker = true
-					break
-				}
-			}
-
-			if !isAttacker {
+			if piece == chess.Empty || !containsPiece(attackerPieces, piece) {
 				continue
 			}
 

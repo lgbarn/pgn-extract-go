@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
+	"github.com/lgbarn/pgn-extract-go/internal/config"
 	"github.com/lgbarn/pgn-extract-go/internal/engine"
 	"github.com/lgbarn/pgn-extract-go/internal/hashing"
 	"github.com/lgbarn/pgn-extract-go/internal/processing"
@@ -27,175 +28,218 @@ type FilterResult struct {
 func applyFilters(game *chess.Game, ctx *ProcessingContext) FilterResult {
 	result := FilterResult{Matched: true}
 
-	// Apply fixes if requested (do this before validation)
 	if *fixableMode {
 		fixGame(game)
 	}
 
-	// Validation checks
-	if *strictMode || *validateMode {
-		validResult := validateGame(game)
-
-		// In strict mode, skip games with any parse errors
-		if *strictMode && len(validResult.ParseErrors) > 0 {
-			result.Matched = false
-			result.SkipOutput = true
-			if len(validResult.ParseErrors) > 0 {
-				result.ErrorMessage = validResult.ParseErrors[0]
-			}
-			return result
-		}
-
-		// In validate mode, skip games with illegal moves
-		if *validateMode && !validResult.Valid {
-			result.Matched = false
-			result.SkipOutput = true
-			result.ErrorMessage = validResult.ErrorMsg
-			return result
-		}
+	if failed := applyValidation(game); failed != nil {
+		return *failed
 	}
 
-	// Add ECO tags if classifier is available
 	if ctx.ecoClassifier != nil {
 		ctx.ecoClassifier.AddECOTags(game)
 	}
 
-	// Check filter criteria
-	if ctx.gameFilter != nil && ctx.gameFilter.HasCriteria() {
-		result.Matched = ctx.gameFilter.MatchGame(game)
-	}
+	// Apply tag and pattern filters
+	result.Matched = applyTagFilters(game, ctx, result.Matched)
+	result.Matched = applyPatternFilters(game, ctx, result.Matched)
 
-	// Check CQL filter
-	if result.Matched && ctx.cqlNode != nil {
-		result.Matched = matchesCQL(game, ctx.cqlNode)
-	}
-
-	// Check variation matcher
-	if result.Matched && ctx.variationMatcher != nil {
-		result.Matched = ctx.variationMatcher.MatchGame(game)
-	}
-
-	// Check material matcher
-	if result.Matched && ctx.materialMatcher != nil {
-		result.Matched = ctx.materialMatcher.MatchGame(game)
-	}
-
-	// Calculate ply count for bounds checking
+	// Calculate and check ply/move bounds
 	result.PlyCount = processing.CountPlies(game)
+	result.Matched = checkPlyBounds(result.PlyCount, result.Matched)
+	result.Matched = checkMoveBounds(result.PlyCount, result.Matched)
 
-	// Check ply bounds
-	if result.Matched && *minPly > 0 && result.PlyCount < *minPly {
-		result.Matched = false
-	}
-	if result.Matched && *maxPly > 0 && result.PlyCount > *maxPly {
-		result.Matched = false
-	}
-
-	// Check move bounds (moves = plies / 2, rounded up)
-	moveCount := (result.PlyCount + 1) / 2
-	if result.Matched && *minMoves > 0 && moveCount < *minMoves {
-		result.Matched = false
-	}
-	if result.Matched && *maxMoves > 0 && moveCount > *maxMoves {
-		result.Matched = false
-	}
-
-	// Game analysis (creates its own board - thread-safe)
-	cfg := ctx.cfg
-	needsReplay := *checkmateFilter || *stalemateFilter || ctx.detector != nil ||
-		*fiftyMoveFilter || *repetitionFilter || *underpromotionFilter ||
-		*higherRatedWinner || *lowerRatedWinner || cfg.Annotation.AddFENComments || cfg.Annotation.AddHashComments ||
-		cfg.Annotation.AddHashTag
-
-	if needsReplay {
+	// Analyze game if needed for feature filters
+	if needsGameAnalysis(ctx) {
 		result.Board, result.GameInfo = analyzeGame(game)
 	}
 
-	// Check checkmate filter
-	if result.Matched && *checkmateFilter {
-		if !engine.IsCheckmate(result.Board) {
-			result.Matched = false
-		}
-	}
+	// Apply game feature filters
+	result.Matched = applyFeatureFilters(&result, game, result.Matched)
 
-	// Check stalemate filter
-	if result.Matched && *stalemateFilter {
-		if !engine.IsStalemate(result.Board) {
-			result.Matched = false
-		}
-	}
-
-	// Check fifty-move rule filter
-	if result.Matched && *fiftyMoveFilter {
-		if result.GameInfo == nil || !result.GameInfo.HasFiftyMoveRule {
-			result.Matched = false
-		}
-	}
-
-	// Check repetition filter
-	if result.Matched && *repetitionFilter {
-		if result.GameInfo == nil || !result.GameInfo.HasRepetition {
-			result.Matched = false
-		}
-	}
-
-	// Check underpromotion filter
-	if result.Matched && *underpromotionFilter {
-		if result.GameInfo == nil || !result.GameInfo.HasUnderpromotion {
-			result.Matched = false
-		}
-	}
-
-	// Check commented filter
-	if result.Matched && *commentedFilter {
-		if !processing.HasComments(game) {
-			result.Matched = false
-		}
-	}
-
-	// Check rating-based winner filters
-	if result.Matched && (*higherRatedWinner || *lowerRatedWinner) {
-		whiteElo := parseElo(game.Tags["WhiteElo"])
-		blackElo := parseElo(game.Tags["BlackElo"])
-		gameResult := game.Tags["Result"]
-
-		if whiteElo > 0 && blackElo > 0 {
-			if *higherRatedWinner {
-				higherWon := (whiteElo > blackElo && gameResult == "1-0") ||
-					(blackElo > whiteElo && gameResult == "0-1")
-				if !higherWon {
-					result.Matched = false
-				}
-			}
-			if *lowerRatedWinner {
-				lowerWon := (whiteElo < blackElo && gameResult == "1-0") ||
-					(blackElo < whiteElo && gameResult == "0-1")
-				if !lowerWon {
-					result.Matched = false
-				}
-			}
-		} else {
-			result.Matched = false // No rating info available
-		}
-	}
-
-	// Handle negated matching
 	if *negateMatch {
 		result.Matched = !result.Matched
 	}
 
-	// Add plycount tag if requested (and matched)
-	if result.Matched && cfg.Annotation.AddPlyCount {
-		game.Tags["PlyCount"] = strconv.Itoa(result.PlyCount)
-	}
-
-	// Add hashcode tag if requested (and matched)
-	if result.Matched && cfg.Annotation.AddHashTag && result.Board != nil {
-		hash := hashing.GenerateZobristHash(result.Board)
-		game.Tags["HashCode"] = fmt.Sprintf("%016x", hash)
+	if result.Matched {
+		addAnnotations(game, &result, ctx.cfg)
 	}
 
 	return result
+}
+
+// applyValidation checks validation modes and returns a failure result if validation fails.
+func applyValidation(game *chess.Game) *FilterResult {
+	if !*strictMode && !*validateMode {
+		return nil
+	}
+
+	validResult := validateGame(game)
+
+	if *strictMode && len(validResult.ParseErrors) > 0 {
+		return &FilterResult{
+			Matched:      false,
+			SkipOutput:   true,
+			ErrorMessage: validResult.ParseErrors[0],
+		}
+	}
+
+	if *validateMode && !validResult.Valid {
+		return &FilterResult{
+			Matched:      false,
+			SkipOutput:   true,
+			ErrorMessage: validResult.ErrorMsg,
+		}
+	}
+
+	return nil
+}
+
+// applyTagFilters applies tag-based filters (game filter, CQL, variation, material).
+func applyTagFilters(game *chess.Game, ctx *ProcessingContext, matched bool) bool {
+	if !matched {
+		return false
+	}
+
+	if ctx.gameFilter != nil && ctx.gameFilter.HasCriteria() && !ctx.gameFilter.MatchGame(game) {
+		return false
+	}
+
+	if ctx.cqlNode != nil && !matchesCQL(game, ctx.cqlNode) {
+		return false
+	}
+
+	if ctx.variationMatcher != nil && !ctx.variationMatcher.MatchGame(game) {
+		return false
+	}
+
+	if ctx.materialMatcher != nil && !ctx.materialMatcher.MatchGame(game) {
+		return false
+	}
+
+	return true
+}
+
+// applyPatternFilters is kept for extensibility but currently a no-op.
+func applyPatternFilters(_ *chess.Game, _ *ProcessingContext, matched bool) bool {
+	return matched
+}
+
+// checkPlyBounds checks if the game meets ply count requirements.
+func checkPlyBounds(plyCount int, matched bool) bool {
+	if !matched {
+		return false
+	}
+	if *minPly > 0 && plyCount < *minPly {
+		return false
+	}
+	if *maxPly > 0 && plyCount > *maxPly {
+		return false
+	}
+	return true
+}
+
+// checkMoveBounds checks if the game meets move count requirements.
+func checkMoveBounds(plyCount int, matched bool) bool {
+	if !matched {
+		return false
+	}
+	moveCount := (plyCount + 1) / 2
+	if *minMoves > 0 && moveCount < *minMoves {
+		return false
+	}
+	if *maxMoves > 0 && moveCount > *maxMoves {
+		return false
+	}
+	return true
+}
+
+// needsGameAnalysis returns true if game analysis is required for any enabled filter.
+func needsGameAnalysis(ctx *ProcessingContext) bool {
+	cfg := ctx.cfg
+	return *checkmateFilter || *stalemateFilter || ctx.detector != nil ||
+		*fiftyMoveFilter || *repetitionFilter || *underpromotionFilter ||
+		*higherRatedWinner || *lowerRatedWinner ||
+		cfg.Annotation.AddFENComments || cfg.Annotation.AddHashComments || cfg.Annotation.AddHashTag
+}
+
+// applyFeatureFilters applies game feature filters (checkmate, stalemate, etc).
+func applyFeatureFilters(result *FilterResult, game *chess.Game, matched bool) bool {
+	if !matched {
+		return false
+	}
+
+	if *checkmateFilter && !engine.IsCheckmate(result.Board) {
+		return false
+	}
+
+	if *stalemateFilter && !engine.IsStalemate(result.Board) {
+		return false
+	}
+
+	if *fiftyMoveFilter && (result.GameInfo == nil || !result.GameInfo.HasFiftyMoveRule) {
+		return false
+	}
+
+	if *repetitionFilter && (result.GameInfo == nil || !result.GameInfo.HasRepetition) {
+		return false
+	}
+
+	if *underpromotionFilter && (result.GameInfo == nil || !result.GameInfo.HasUnderpromotion) {
+		return false
+	}
+
+	if *commentedFilter && !processing.HasComments(game) {
+		return false
+	}
+
+	if (*higherRatedWinner || *lowerRatedWinner) && !checkRatingWinner(game) {
+		return false
+	}
+
+	return true
+}
+
+// checkRatingWinner checks if the game result matches the rating-based winner filter.
+func checkRatingWinner(game *chess.Game) bool {
+	whiteElo := parseElo(game.Tags["WhiteElo"])
+	blackElo := parseElo(game.Tags["BlackElo"])
+
+	if whiteElo <= 0 || blackElo <= 0 {
+		return false
+	}
+
+	gameResult := game.Tags["Result"]
+
+	if *higherRatedWinner {
+		higherWon := (whiteElo > blackElo && gameResult == "1-0") ||
+			(blackElo > whiteElo && gameResult == "0-1")
+		if !higherWon {
+			return false
+		}
+	}
+
+	if *lowerRatedWinner {
+		lowerWon := (whiteElo < blackElo && gameResult == "1-0") ||
+			(blackElo < whiteElo && gameResult == "0-1")
+		if !lowerWon {
+			return false
+		}
+	}
+
+	return true
+}
+
+// addAnnotations adds requested annotations to a matched game.
+func addAnnotations(game *chess.Game, result *FilterResult, cfg *config.Config) {
+	if cfg.Annotation.AddPlyCount {
+		game.Tags["PlyCount"] = strconv.Itoa(result.PlyCount)
+	}
+
+	if cfg.Annotation.AddHashTag && result.Board != nil {
+		hash := hashing.GenerateZobristHash(result.Board)
+		game.Tags["HashCode"] = fmt.Sprintf("%016x", hash)
+	}
 }
 
 // parseElo parses an Elo rating string to int

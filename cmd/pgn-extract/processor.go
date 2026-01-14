@@ -120,24 +120,18 @@ func outputGamesWithProcessing(games []*chess.Game, ctx *ProcessingContext) (int
 // outputGamesSequential processes games sequentially (single-threaded).
 func outputGamesSequential(games []*chess.Game, ctx *ProcessingContext) (int, int) {
 	cfg := ctx.cfg
-	detector := ctx.detector
-
 	outputCount := 0
 	duplicateCount := 0
 
-	// For JSON output, collect games first then output all at once
 	var jsonGames []*chess.Game
 
 	for _, game := range games {
-		// Check if we should stop
 		if *stopAfter > 0 && atomic.LoadInt64(&matchedCount) >= int64(*stopAfter) {
 			break
 		}
 
-		// Apply all filters using shared logic
 		filterResult := applyFilters(game, ctx)
 
-		// Handle validation failures (skip entirely)
 		if filterResult.SkipOutput {
 			if !*quiet && filterResult.ErrorMessage != "" {
 				fmt.Fprintf(os.Stderr, "Skipping game: %s\n", filterResult.ErrorMessage)
@@ -145,71 +139,22 @@ func outputGamesSequential(games []*chess.Game, ctx *ProcessingContext) (int, in
 			continue
 		}
 
-		// If not matched, skip or output to non-matching file
 		if !filterResult.Matched {
-			if cfg.NonMatchingFile != nil {
-				withOutputFile(cfg, cfg.NonMatchingFile, func() {
-					output.OutputGame(game, cfg)
-				})
-			}
+			outputNonMatchingGame(game, cfg)
 			continue
 		}
 
-		// Report-only mode - don't output games
 		if *reportOnly {
 			atomic.AddInt64(&matchedCount, 1)
 			outputCount++
 			continue
 		}
 
-		// Handle duplicate detection
-		if detector != nil {
-			board := filterResult.Board
-			if board == nil {
-				board = replayGame(game)
-			}
-
-			isDuplicate := detector.CheckAndAdd(game, board)
-
-			if isDuplicate {
-				duplicateCount++
-				// Output to duplicate file if configured
-				if cfg.Duplicate.DuplicateFile != nil {
-					withOutputFile(cfg, cfg.Duplicate.DuplicateFile, func() {
-						if cfg.Output.JSONFormat {
-							output.OutputGameJSON(game, cfg)
-						} else {
-							output.OutputGame(game, cfg)
-						}
-					})
-				}
-				// If outputting only duplicates
-				if cfg.Duplicate.SuppressOriginals {
-					outputGameWithAnnotations(game, cfg, filterResult.GameInfo, &jsonGames)
-					atomic.AddInt64(&matchedCount, 1)
-					outputCount++
-				}
-			} else {
-				// Not a duplicate - output normally unless suppressing duplicates
-				if !cfg.Duplicate.Suppress {
-					outputGameWithAnnotations(game, cfg, filterResult.GameInfo, &jsonGames)
-					atomic.AddInt64(&matchedCount, 1)
-					outputCount++
-				} else if !cfg.Duplicate.SuppressOriginals {
-					outputGameWithAnnotations(game, cfg, filterResult.GameInfo, &jsonGames)
-					atomic.AddInt64(&matchedCount, 1)
-					outputCount++
-				}
-			}
-		} else {
-			// No duplicate detection
-			outputGameWithAnnotations(game, cfg, filterResult.GameInfo, &jsonGames)
-			atomic.AddInt64(&matchedCount, 1)
-			outputCount++
-		}
+		out, dup := handleGameOutput(game, filterResult.Board, filterResult.GameInfo, ctx, &jsonGames)
+		outputCount += out
+		duplicateCount += dup
 	}
 
-	// Output JSON array if JSON mode
 	if cfg.Output.JSONFormat && len(jsonGames) > 0 {
 		output.OutputGamesJSON(jsonGames, cfg, cfg.OutputFile)
 	}
@@ -217,20 +162,83 @@ func outputGamesSequential(games []*chess.Game, ctx *ProcessingContext) (int, in
 	return outputCount, duplicateCount
 }
 
+// outputNonMatchingGame outputs a game to the non-matching file if configured.
+func outputNonMatchingGame(game *chess.Game, cfg *config.Config) {
+	if cfg.NonMatchingFile == nil {
+		return
+	}
+	withOutputFile(cfg, cfg.NonMatchingFile, func() {
+		output.OutputGame(game, cfg)
+	})
+}
+
+// handleGameOutput handles duplicate detection and game output.
+// Returns (output count, duplicate count).
+func handleGameOutput(game *chess.Game, board *chess.Board, gameInfo *GameAnalysis, ctx *ProcessingContext, jsonGames *[]*chess.Game) (int, int) {
+	cfg := ctx.cfg
+	detector := ctx.detector
+
+	if detector == nil {
+		outputGameWithAnnotations(game, cfg, gameInfo, jsonGames)
+		atomic.AddInt64(&matchedCount, 1)
+		return 1, 0
+	}
+
+	if board == nil {
+		board = replayGame(game)
+	}
+
+	isDuplicate := detector.CheckAndAdd(game, board)
+
+	if isDuplicate {
+		outputDuplicateGame(game, cfg)
+		if cfg.Duplicate.SuppressOriginals {
+			outputGameWithAnnotations(game, cfg, gameInfo, jsonGames)
+			atomic.AddInt64(&matchedCount, 1)
+			return 1, 1
+		}
+		return 0, 1
+	}
+
+	// Not a duplicate - output if not suppressing or if not outputting only duplicates
+	if shouldOutputUnique(cfg) {
+		outputGameWithAnnotations(game, cfg, gameInfo, jsonGames)
+		atomic.AddInt64(&matchedCount, 1)
+		return 1, 0
+	}
+
+	return 0, 0
+}
+
+// shouldOutputUnique returns true if unique (non-duplicate) games should be output.
+func shouldOutputUnique(cfg *config.Config) bool {
+	return !cfg.Duplicate.Suppress || !cfg.Duplicate.SuppressOriginals
+}
+
+// outputDuplicateGame outputs a game to the duplicate file if configured.
+func outputDuplicateGame(game *chess.Game, cfg *config.Config) {
+	if cfg.Duplicate.DuplicateFile == nil {
+		return
+	}
+	withOutputFile(cfg, cfg.Duplicate.DuplicateFile, func() {
+		if cfg.Output.JSONFormat {
+			output.OutputGameJSON(game, cfg)
+		} else {
+			output.OutputGame(game, cfg)
+		}
+	})
+}
+
 // outputGamesParallel processes games using a worker pool for parallel execution.
 func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers int) (int, int) {
 	cfg := ctx.cfg
-	detector := ctx.detector // Use the shared detector directly (result collection is single-threaded)
-
 	outputCount := int64(0)
 	duplicateCount := int64(0)
 
-	// Create the processing function that will run in worker goroutines
 	processFunc := func(item worker.WorkItem) worker.ProcessResult {
 		return processGameWorker(item, ctx)
 	}
 
-	// Create and start pool
 	bufferSize := len(games)
 	if bufferSize > 100 {
 		bufferSize = 100
@@ -238,10 +246,8 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 	pool := worker.NewPool(numWorkers, bufferSize, processFunc)
 	pool.Start()
 
-	// Submit all games in a separate goroutine
 	go func() {
 		for i, game := range games {
-			// Check stopAfter before submitting
 			if *stopAfter > 0 && atomic.LoadInt64(&matchedCount) >= int64(*stopAfter) {
 				break
 			}
@@ -250,86 +256,31 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 		pool.Close()
 	}()
 
-	// For JSON output, collect games first
 	var jsonGames []*chess.Game
 
-	// Collect results from the result channel (single goroutine - serializes output)
 	for result := range pool.Results() {
-		// Check stopAfter
 		if *stopAfter > 0 && atomic.LoadInt64(&matchedCount) >= int64(*stopAfter) {
 			pool.Stop()
-			continue // Drain remaining results
-		}
-
-		// Handle non-matching games
-		if !result.Matched {
-			if cfg.NonMatchingFile != nil {
-				withOutputFile(cfg, cfg.NonMatchingFile, func() {
-					output.OutputGame(result.Game, cfg)
-				})
-			}
 			continue
 		}
 
-		// Report-only mode
+		if !result.Matched {
+			outputNonMatchingGame(result.Game, cfg)
+			continue
+		}
+
 		if *reportOnly {
 			atomic.AddInt64(&matchedCount, 1)
 			atomic.AddInt64(&outputCount, 1)
 			continue
 		}
 
-		// Handle duplicate detection (single-threaded in result collection)
-		if detector != nil {
-			board := result.Board
-			if board == nil {
-				board = replayGame(result.Game)
-			}
-
-			isDuplicate := detector.CheckAndAdd(result.Game, board)
-
-			if isDuplicate {
-				atomic.AddInt64(&duplicateCount, 1)
-				// Output to duplicate file if configured
-				if cfg.Duplicate.DuplicateFile != nil {
-					withOutputFile(cfg, cfg.Duplicate.DuplicateFile, func() {
-						if cfg.Output.JSONFormat {
-							output.OutputGameJSON(result.Game, cfg)
-						} else {
-							output.OutputGame(result.Game, cfg)
-						}
-					})
-				}
-				// If outputting only duplicates
-				if cfg.Duplicate.SuppressOriginals {
-					gameInfo, _ := result.GameInfo.(*GameAnalysis)
-					outputGameWithAnnotations(result.Game, cfg, gameInfo, &jsonGames)
-					atomic.AddInt64(&matchedCount, 1)
-					atomic.AddInt64(&outputCount, 1)
-				}
-			} else {
-				// Not a duplicate - output normally unless suppressing duplicates
-				if !cfg.Duplicate.Suppress {
-					gameInfo, _ := result.GameInfo.(*GameAnalysis)
-					outputGameWithAnnotations(result.Game, cfg, gameInfo, &jsonGames)
-					atomic.AddInt64(&matchedCount, 1)
-					atomic.AddInt64(&outputCount, 1)
-				} else if !cfg.Duplicate.SuppressOriginals {
-					gameInfo, _ := result.GameInfo.(*GameAnalysis)
-					outputGameWithAnnotations(result.Game, cfg, gameInfo, &jsonGames)
-					atomic.AddInt64(&matchedCount, 1)
-					atomic.AddInt64(&outputCount, 1)
-				}
-			}
-		} else {
-			// No duplicate detection
-			gameInfo, _ := result.GameInfo.(*GameAnalysis)
-			outputGameWithAnnotations(result.Game, cfg, gameInfo, &jsonGames)
-			atomic.AddInt64(&matchedCount, 1)
-			atomic.AddInt64(&outputCount, 1)
-		}
+		gameInfo, _ := result.GameInfo.(*GameAnalysis)
+		out, dup := handleGameOutput(result.Game, result.Board, gameInfo, ctx, &jsonGames)
+		atomic.AddInt64(&outputCount, int64(out))
+		atomic.AddInt64(&duplicateCount, int64(dup))
 	}
 
-	// Output JSON array if JSON mode
 	if cfg.Output.JSONFormat && len(jsonGames) > 0 {
 		output.OutputGamesJSON(jsonGames, cfg, cfg.OutputFile)
 	}

@@ -44,34 +44,25 @@ type ValidationResult struct {
 // AnalyzeGame replays a game and analyzes it for various features.
 func AnalyzeGame(game *chess.Game) (*chess.Board, *GameAnalysis) {
 	board := engine.NewBoardForGame(game)
+	analysis := &GameAnalysis{}
 
-	analysis := &GameAnalysis{
-		Positions: make([]uint64, 0),
-	}
-
-	// Track initial position
 	posHash := hashing.GenerateZobristHash(board)
 	analysis.Positions = append(analysis.Positions, posHash)
-	positionCount := make(map[uint64]int)
-	positionCount[posHash] = 1
+	positionCount := map[uint64]int{posHash: 1}
 
-	// Apply all moves
 	for move := game.Moves; move != nil; move = move.Next {
 		if !engine.ApplyMove(board, move) {
 			break
 		}
 
-		// Check for fifty-move rule
 		if board.HalfmoveClock >= 100 {
 			analysis.HasFiftyMoveRule = true
 		}
 
-		// Check for underpromotion
 		if move.PromotedPiece != chess.Empty && move.PromotedPiece != chess.Queen {
 			analysis.HasUnderpromotion = true
 		}
 
-		// Track position for repetition
 		posHash = hashing.GenerateZobristHash(board)
 		analysis.Positions = append(analysis.Positions, posHash)
 		positionCount[posHash]++
@@ -88,10 +79,8 @@ func AnalyzeGame(game *chess.Game) (*chess.Board, *GameAnalysis) {
 func ReplayGame(game *chess.Game) *chess.Board {
 	board := engine.NewBoardForGame(game)
 
-	// Apply all moves
 	for move := game.Moves; move != nil; move = move.Next {
 		if !engine.ApplyMove(board, move) {
-			// Move application failed - return current board state
 			break
 		}
 	}
@@ -111,9 +100,8 @@ func ValidateGame(game *chess.Game) *ValidationResult {
 		}
 	}
 
-	// Check for valid result
 	resultTag := game.GetTag("Result")
-	if resultTag != "" && resultTag != "1-0" && resultTag != "0-1" && resultTag != "1/2-1/2" && resultTag != "*" {
+	if resultTag != "" && !isValidResult(resultTag) {
 		result.ParseErrors = append(result.ParseErrors, fmt.Sprintf("invalid result: %s", resultTag))
 	}
 
@@ -172,4 +160,14 @@ func HasComments(game *chess.Game) bool {
 		}
 	}
 	return false
+}
+
+// isValidResult checks if a result string is a valid PGN result.
+func isValidResult(result string) bool {
+	switch result {
+	case "1-0", "0-1", "1/2-1/2", "*":
+		return true
+	default:
+		return false
+	}
 }

@@ -7,10 +7,21 @@ import (
 	"testing"
 )
 
+// createTempPGN creates a temporary PGN file with the given content.
+func createTempPGN(t *testing.T, filename, content string) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, filename)
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	return tmpFile
+}
+
 // createTempPGNWithClocks creates a temporary PGN file with clock annotations for testing.
 func createTempPGNWithClocks(t *testing.T) string {
 	t.Helper()
-	content := `[Event "Test Game"]
+	return createTempPGN(t, "clocks.pgn", `[Event "Test Game"]
 [Site "Test"]
 [Date "2024.01.01"]
 [Round "1"]
@@ -19,20 +30,13 @@ func createTempPGNWithClocks(t *testing.T) string {
 [Result "1-0"]
 
 1. e4 {[%clk 0:10:00]} e5 {[%clk 0:09:58]} 2. Nf3 {[%clk 0:09:55.5]} Nc6 {[%clk 0:09:50.2]} 1-0
-`
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "clocks.pgn")
-	err := os.WriteFile(tmpFile, []byte(content), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	return tmpFile
+`)
 }
 
 // createTempPGNWithMixedComments creates a PGN with both clock annotations and regular comments.
 func createTempPGNWithMixedComments(t *testing.T) string {
 	t.Helper()
-	content := `[Event "Test Game"]
+	return createTempPGN(t, "mixed.pgn", `[Event "Test Game"]
 [Site "Test"]
 [Date "2024.01.01"]
 [Round "1"]
@@ -41,20 +45,13 @@ func createTempPGNWithMixedComments(t *testing.T) string {
 [Result "1-0"]
 
 1. e4 {[%clk 0:10:00]} e5 {Good move} 2. Nf3 {[%clk 0:09:55.5] Developing} Nc6 {Natural} 1-0
-`
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "mixed.pgn")
-	err := os.WriteFile(tmpFile, []byte(content), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	return tmpFile
+`)
 }
 
 // createTempPGNWithMultipleAnnotations creates a PGN with multiple annotation types in one comment.
 func createTempPGNWithMultipleAnnotations(t *testing.T) string {
 	t.Helper()
-	content := `[Event "Test Game"]
+	return createTempPGN(t, "multi.pgn", `[Event "Test Game"]
 [Site "Test"]
 [Date "2024.01.01"]
 [Round "1"]
@@ -63,14 +60,7 @@ func createTempPGNWithMultipleAnnotations(t *testing.T) string {
 [Result "1-0"]
 
 1. e4 {[%clk 0:10:00][%eval 0.5]} e5 {[%clk 0:09:58][%eval 0.3] Good response} 1-0
-`
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "multi.pgn")
-	err := os.WriteFile(tmpFile, []byte(content), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	return tmpFile
+`)
 }
 
 // TestNoClocksFlag verifies the --noclocks flag is recognized.

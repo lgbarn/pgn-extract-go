@@ -11,18 +11,22 @@ const (
 
 // String returns the string representation of a colour.
 func (c Colour) String() string {
-	if c == White {
+	switch c {
+	case White:
 		return "White"
+	default:
+		return "Black"
 	}
-	return "Black"
 }
 
 // Opposite returns the opposite colour.
 func (c Colour) Opposite() Colour {
-	if c == White {
+	switch c {
+	case White:
 		return Black
+	default:
+		return White
 	}
-	return White
 }
 
 // Piece represents a chess piece type.
@@ -40,20 +44,24 @@ const (
 	NumPieceValues
 )
 
+// pieceNames maps piece values to their string representations.
+var pieceNames = []string{"Off", "Empty", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"}
+
 // String returns the string representation of a piece.
 func (p Piece) String() string {
-	names := []string{"Off", "Empty", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"}
-	if int(p) < len(names) {
-		return names[p]
+	if int(p) < len(pieceNames) {
+		return pieceNames[p]
 	}
 	return "Unknown"
 }
 
+// pieceLetters maps piece values to their single-letter representations.
+var pieceLetters = []byte{' ', ' ', 'P', 'N', 'B', 'R', 'Q', 'K'}
+
 // Letter returns the single letter representation of a piece (uppercase).
 func (p Piece) Letter() byte {
-	letters := []byte{' ', ' ', 'P', 'N', 'B', 'R', 'Q', 'K'}
-	if int(p) < len(letters) {
-		return letters[p]
+	if int(p) < len(pieceLetters) {
+		return pieceLetters[p]
 	}
 	return '?'
 }
@@ -128,10 +136,12 @@ func ToCol(c int) Col {
 
 // ColourOffset returns +1 for White, -1 for Black (for pawn direction).
 func ColourOffset(colour Colour) int {
-	if colour == White {
+	switch colour {
+	case White:
 		return 1
+	default:
+		return -1
 	}
-	return -1
 }
 
 // HashCode is the type for position hashing.

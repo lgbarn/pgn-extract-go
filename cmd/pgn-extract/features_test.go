@@ -7,12 +7,6 @@ import (
 	"testing"
 )
 
-// Helper function to count games in output
-func countGamesInOutput(output string) int {
-	// Count [Event tags as a proxy for game count
-	return strings.Count(output, "[Event ")
-}
-
 // TestNegatedMatching tests the -n flag for negated matching
 func TestNegatedMatching(t *testing.T) {
 	// Find games with checkmate
@@ -288,7 +282,7 @@ func TestReportOnly(t *testing.T) {
 	if gameCount > 0 {
 		t.Errorf("-r: expected no game output, got %d games", gameCount)
 	}
-	t.Logf("-r: stdout games=%d, stderr=%q", gameCount, stderr[:min(100, len(stderr))])
+	t.Logf("-r: stdout games=%d, stderr=%q", gameCount, stderr[:minInt(100, len(stderr))])
 }
 
 // TestEPDOutput tests the -W epd output format
@@ -335,7 +329,8 @@ func TestCombinedFilters(t *testing.T) {
 	t.Logf("Combined filters (minply 20 + result 1-0): found %d games", count)
 }
 
-func min(a, b int) int {
+// minInt returns the smaller of two integers.
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

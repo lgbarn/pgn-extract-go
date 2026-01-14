@@ -33,191 +33,36 @@ func main() {
 	}
 
 	cfg := config.NewConfig()
-
-	// Apply flags to config
 	applyFlags(cfg)
 
-	// Set up logging
-	if *logFile != "" {
-		file, err := os.Create(*logFile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating log file %s: %v\n", *logFile, err)
-			os.Exit(1)
-		}
-		defer file.Close()
-		cfg.LogFile = file
-	}
-	if *appendLog != "" {
-		file, err := os.OpenFile(*appendLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error opening log file %s: %v\n", *appendLog, err)
-			os.Exit(1)
-		}
-		defer file.Close()
-		cfg.LogFile = file
-	}
-
-	// Set up output file
-	if *outputFile != "" {
-		var file *os.File
-		var err error
-		if *appendOutput {
-			file, err = os.OpenFile(*outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		} else {
-			file, err = os.Create(*outputFile)
-		}
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating output file %s: %v\n", *outputFile, err)
-			os.Exit(1)
-		}
-		defer file.Close()
-		cfg.OutputFile = file
-	}
+	// Set up logging and output files
+	setupLogFile(cfg)
+	setupOutputFile(cfg)
+	setupDuplicateFile(cfg)
 
 	// Set up non-matching file for -n flag
-	var nonMatchFile *os.File
 	if *negateMatch && *outputFile != "" {
 		cfg.NonMatchingFile = cfg.OutputFile
-		cfg.OutputFile = nil // Don't output matching games
+		cfg.OutputFile = nil
 	}
 
-	// Set up duplicate file
-	var dupFile *os.File
-	if *duplicateFile != "" {
-		var err error
-		dupFile, err = os.Create(*duplicateFile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating duplicate file %s: %v\n", *duplicateFile, err)
-			os.Exit(1)
-		}
-		defer dupFile.Close()
-		cfg.Duplicate.DuplicateFile = dupFile
-	}
+	// Create duplicate detector and load check file if needed
+	detector := setupDuplicateDetector(cfg)
 
-	// Create duplicate detector if needed
-	var detector *hashing.DuplicateDetector
-	if *suppressDuplicates || *duplicateFile != "" || *outputDupsOnly || *checkFile != "" {
-		detector = hashing.NewDuplicateDetector(false)
-		cfg.Duplicate.Suppress = *suppressDuplicates
-		cfg.Duplicate.SuppressOriginals = *outputDupsOnly
-	}
+	// Load ECO classifier if specified
+	ecoClassifier := loadECOClassifier(cfg)
 
-	// Load check file for duplicate detection
-	if *checkFile != "" && detector != nil {
-		file, err := os.Open(*checkFile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error opening check file %s: %v\n", *checkFile, err)
-			os.Exit(1)
-		}
-		checkGames := processInput(file, *checkFile, cfg)
-		file.Close()
-		// Add all games from checkfile to detector
-		for _, game := range checkGames {
-			board := replayGame(game)
-			detector.CheckAndAdd(game, board)
-		}
-		if cfg.Verbosity > 0 {
-			fmt.Fprintf(cfg.LogFile, "Loaded %d games from check file\n", len(checkGames))
-		}
-	}
+	// Set up game filter with all criteria
+	gameFilter := setupGameFilter()
 
-	// Load ECO file if specified
-	var ecoClassifier *eco.ECOClassifier
-	if *ecoFile != "" {
-		ecoClassifier = eco.NewECOClassifier()
-		if err := ecoClassifier.LoadFromFile(*ecoFile); err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading ECO file %s: %v\n", *ecoFile, err)
-			os.Exit(1)
-		}
-		if cfg.Verbosity > 0 {
-			fmt.Fprintf(cfg.LogFile, "Loaded %d ECO entries\n", ecoClassifier.EntriesLoaded())
-		}
-		cfg.AddECO = true
-	}
-
-	// Set up game filter
-	gameFilter := matching.NewGameFilter()
-	gameFilter.SetUseSoundex(*useSoundex)
-	gameFilter.SetSubstringMatch(*tagSubstring)
-
-	// Load tag criteria file if specified
-	if *tagFile != "" {
-		if err := gameFilter.LoadTagFile(*tagFile); err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading tag file %s: %v\n", *tagFile, err)
-			os.Exit(1)
-		}
-	}
-
-	// Add individual filter criteria
-	if *playerFilter != "" {
-		gameFilter.AddPlayerFilter(*playerFilter)
-	}
-	if *whiteFilter != "" {
-		gameFilter.AddWhiteFilter(*whiteFilter)
-	}
-	if *blackFilter != "" {
-		gameFilter.AddBlackFilter(*blackFilter)
-	}
-	if *ecoFilter != "" {
-		gameFilter.AddECOFilter(*ecoFilter)
-	}
-	if *resultFilter != "" {
-		gameFilter.AddResultFilter(*resultFilter)
-	}
-	if *fenFilter != "" {
-		if err := gameFilter.AddFENFilter(*fenFilter); err != nil {
-			fmt.Fprintf(os.Stderr, "Error parsing FEN filter: %v\n", err)
-			os.Exit(1)
-		}
-	}
-
-	// Load variation file if specified
-	var variationMatcher *matching.VariationMatcher
-	if *variationFile != "" {
-		variationMatcher = matching.NewVariationMatcher()
-		if err := variationMatcher.LoadFromFile(*variationFile); err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading variation file %s: %v\n", *variationFile, err)
-			os.Exit(1)
-		}
-	}
-	if *positionFile != "" {
-		if variationMatcher == nil {
-			variationMatcher = matching.NewVariationMatcher()
-		}
-		if err := variationMatcher.LoadPositionalFromFile(*positionFile); err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading position file %s: %v\n", *positionFile, err)
-			os.Exit(1)
-		}
-	}
+	// Load variation matcher if specified
+	variationMatcher := loadVariationMatcher()
 
 	// Parse material match criteria
-	var materialMatcher *matching.MaterialMatcher
-	if *materialMatch != "" {
-		materialMatcher = matching.NewMaterialMatcher(*materialMatch, false)
-	}
-	if *materialMatchExact != "" {
-		materialMatcher = matching.NewMaterialMatcher(*materialMatchExact, true)
-	}
+	materialMatcher := loadMaterialMatcher()
 
-	// Parse CQL query if specified (from file or command line)
-	var cqlNode cql.Node
-	cqlQueryStr := *cqlQuery
-	if *cqlFile != "" {
-		content, err := os.ReadFile(*cqlFile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading CQL file %s: %v\n", *cqlFile, err)
-			os.Exit(1)
-		}
-		cqlQueryStr = strings.TrimSpace(string(content))
-	}
-	if cqlQueryStr != "" {
-		var err error
-		cqlNode, err = cql.Parse(cqlQueryStr)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error parsing CQL query: %v\n", err)
-			os.Exit(1)
-		}
-	}
+	// Parse CQL query
+	cqlNode := parseCQLQuery()
 
 	// Set up output splitting
 	var splitWriter *SplitWriter
@@ -230,10 +75,6 @@ func main() {
 		cfg.OutputFile = splitWriter
 	}
 
-	// Process input files or stdin
-	args := flag.Args()
-	var totalGames, outputGames, duplicates int
-
 	// Create processing context
 	ctx := &ProcessingContext{
 		cfg:              cfg,
@@ -245,15 +86,237 @@ func main() {
 		materialMatcher:  materialMatcher,
 	}
 
+	// Process input files or stdin
+	totalGames, outputGames, duplicates := processAllInputs(ctx, splitWriter)
+
+	// Report statistics
+	if cfg.Verbosity > 0 && !*quiet && !*reportOnly {
+		reportStatistics(detector, outputGames, duplicates, totalGames)
+	}
+}
+
+// setupLogFile configures the log file based on command-line flags.
+func setupLogFile(cfg *config.Config) {
+	if *logFile != "" {
+		file, err := os.Create(*logFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating log file %s: %v\n", *logFile, err)
+			os.Exit(1)
+		}
+		cfg.LogFile = file
+	}
+
+	if *appendLog != "" {
+		file, err := os.OpenFile(*appendLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening log file %s: %v\n", *appendLog, err)
+			os.Exit(1)
+		}
+		cfg.LogFile = file
+	}
+}
+
+// setupOutputFile configures the output file based on command-line flags.
+func setupOutputFile(cfg *config.Config) {
+	if *outputFile == "" {
+		return
+	}
+
+	var file *os.File
+	var err error
+
+	if *appendOutput {
+		file, err = os.OpenFile(*outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	} else {
+		file, err = os.Create(*outputFile)
+	}
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating output file %s: %v\n", *outputFile, err)
+		os.Exit(1)
+	}
+	cfg.OutputFile = file
+}
+
+// setupDuplicateFile configures the duplicate output file.
+func setupDuplicateFile(cfg *config.Config) {
+	if *duplicateFile == "" {
+		return
+	}
+
+	file, err := os.Create(*duplicateFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating duplicate file %s: %v\n", *duplicateFile, err)
+		os.Exit(1)
+	}
+	cfg.Duplicate.DuplicateFile = file
+}
+
+// setupDuplicateDetector creates and configures the duplicate detector.
+func setupDuplicateDetector(cfg *config.Config) *hashing.DuplicateDetector {
+	if !*suppressDuplicates && *duplicateFile == "" && !*outputDupsOnly && *checkFile == "" {
+		return nil
+	}
+
+	detector := hashing.NewDuplicateDetector(false)
+	cfg.Duplicate.Suppress = *suppressDuplicates
+	cfg.Duplicate.SuppressOriginals = *outputDupsOnly
+
+	// Load check file for duplicate detection
+	if *checkFile != "" {
+		file, err := os.Open(*checkFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening check file %s: %v\n", *checkFile, err)
+			os.Exit(1)
+		}
+		defer file.Close()
+
+		checkGames := processInput(file, *checkFile, cfg)
+		for _, game := range checkGames {
+			board := replayGame(game)
+			detector.CheckAndAdd(game, board)
+		}
+
+		if cfg.Verbosity > 0 {
+			fmt.Fprintf(cfg.LogFile, "Loaded %d games from check file\n", len(checkGames))
+		}
+	}
+
+	return detector
+}
+
+// loadECOClassifier loads the ECO classification file if specified.
+func loadECOClassifier(cfg *config.Config) *eco.ECOClassifier {
+	if *ecoFile == "" {
+		return nil
+	}
+
+	classifier := eco.NewECOClassifier()
+	if err := classifier.LoadFromFile(*ecoFile); err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading ECO file %s: %v\n", *ecoFile, err)
+		os.Exit(1)
+	}
+
+	if cfg.Verbosity > 0 {
+		fmt.Fprintf(cfg.LogFile, "Loaded %d ECO entries\n", classifier.EntriesLoaded())
+	}
+	cfg.AddECO = true
+
+	return classifier
+}
+
+// setupGameFilter creates and configures the game filter with all criteria.
+func setupGameFilter() *matching.GameFilter {
+	filter := matching.NewGameFilter()
+	filter.SetUseSoundex(*useSoundex)
+	filter.SetSubstringMatch(*tagSubstring)
+
+	// Load tag criteria file if specified
+	if *tagFile != "" {
+		if err := filter.LoadTagFile(*tagFile); err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading tag file %s: %v\n", *tagFile, err)
+			os.Exit(1)
+		}
+	}
+
+	// Add individual filter criteria
+	if *playerFilter != "" {
+		filter.AddPlayerFilter(*playerFilter)
+	}
+	if *whiteFilter != "" {
+		filter.AddWhiteFilter(*whiteFilter)
+	}
+	if *blackFilter != "" {
+		filter.AddBlackFilter(*blackFilter)
+	}
+	if *ecoFilter != "" {
+		filter.AddECOFilter(*ecoFilter)
+	}
+	if *resultFilter != "" {
+		filter.AddResultFilter(*resultFilter)
+	}
+	if *fenFilter != "" {
+		if err := filter.AddFENFilter(*fenFilter); err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing FEN filter: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	return filter
+}
+
+// loadVariationMatcher loads variation and position files if specified.
+func loadVariationMatcher() *matching.VariationMatcher {
+	if *variationFile == "" && *positionFile == "" {
+		return nil
+	}
+
+	matcher := matching.NewVariationMatcher()
+
+	if *variationFile != "" {
+		if err := matcher.LoadFromFile(*variationFile); err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading variation file %s: %v\n", *variationFile, err)
+			os.Exit(1)
+		}
+	}
+
+	if *positionFile != "" {
+		if err := matcher.LoadPositionalFromFile(*positionFile); err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading position file %s: %v\n", *positionFile, err)
+			os.Exit(1)
+		}
+	}
+
+	return matcher
+}
+
+// loadMaterialMatcher creates a material matcher if specified.
+func loadMaterialMatcher() *matching.MaterialMatcher {
+	if *materialMatchExact != "" {
+		return matching.NewMaterialMatcher(*materialMatchExact, true)
+	}
+	if *materialMatch != "" {
+		return matching.NewMaterialMatcher(*materialMatch, false)
+	}
+	return nil
+}
+
+// parseCQLQuery parses the CQL query from file or command line.
+func parseCQLQuery() cql.Node {
+	queryStr := *cqlQuery
+
+	if *cqlFile != "" {
+		content, err := os.ReadFile(*cqlFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading CQL file %s: %v\n", *cqlFile, err)
+			os.Exit(1)
+		}
+		queryStr = strings.TrimSpace(string(content))
+	}
+
+	if queryStr == "" {
+		return nil
+	}
+
+	node, err := cql.Parse(queryStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing CQL query: %v\n", err)
+		os.Exit(1)
+	}
+
+	return node
+}
+
+// processAllInputs processes all input files or stdin.
+func processAllInputs(ctx *ProcessingContext, splitWriter *SplitWriter) (totalGames, outputGames, duplicates int) {
+	args := flag.Args()
+
 	if len(args) == 0 {
-		// Read from stdin
-		games := processInput(os.Stdin, "stdin", cfg)
+		games := processInput(os.Stdin, "stdin", ctx.cfg)
 		totalGames = len(games)
 		outputGames, duplicates = outputGamesWithProcessing(games, ctx)
 	} else {
-		// Process each input file
 		for _, filename := range args {
-			// Check if we should stop
 			if *stopAfter > 0 && atomic.LoadInt64(&matchedCount) >= int64(*stopAfter) {
 				break
 			}
@@ -264,7 +327,7 @@ func main() {
 				continue
 			}
 
-			games := processInput(file, filename, cfg)
+			games := processInput(file, filename, ctx.cfg)
 			totalGames += len(games)
 			out, dup := outputGamesWithProcessing(games, ctx)
 			outputGames += out
@@ -274,23 +337,19 @@ func main() {
 		}
 	}
 
-	// Close split writer if used
 	if splitWriter != nil {
 		splitWriter.Close()
 	}
 
-	// Close non-match file
-	if nonMatchFile != nil {
-		nonMatchFile.Close()
-	}
+	return totalGames, outputGames, duplicates
+}
 
-	// Report statistics
-	if cfg.Verbosity > 0 && !*quiet && !*reportOnly {
-		if detector != nil {
-			fmt.Fprintf(os.Stderr, "%d game(s) output, %d duplicate(s) out of %d.\n", outputGames, duplicates, totalGames)
-		} else {
-			fmt.Fprintf(os.Stderr, "%d game(s) matched out of %d.\n", outputGames, totalGames)
-		}
+// reportStatistics prints the final statistics to stderr.
+func reportStatistics(detector *hashing.DuplicateDetector, outputGames, duplicates, totalGames int) {
+	if detector != nil {
+		fmt.Fprintf(os.Stderr, "%d game(s) output, %d duplicate(s) out of %d.\n", outputGames, duplicates, totalGames)
+	} else {
+		fmt.Fprintf(os.Stderr, "%d game(s) matched out of %d.\n", outputGames, totalGames)
 	}
 }
 

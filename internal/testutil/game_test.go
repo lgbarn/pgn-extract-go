@@ -1,8 +1,17 @@
 package testutil
 
-import (
-	"testing"
-)
+import "testing"
+
+// assertTag is a test helper that verifies a game tag matches the expected value.
+func assertTag(t *testing.T, game interface{ GetTag(string) string }, tag, want string) {
+	t.Helper()
+	if want == "" {
+		return
+	}
+	if got := game.GetTag(tag); got != want {
+		t.Errorf("game.GetTag(%q) = %q, want %q", tag, got, want)
+	}
+}
 
 func TestParseTestGame(t *testing.T) {
 	tests := []struct {
@@ -109,36 +118,16 @@ func TestParseTestGame(t *testing.T) {
 				t.Errorf("game.PlyCount() = %d, want %d", game.PlyCount(), tt.wantMoves)
 			}
 
-			if tt.wantEvent != "" {
-				if got := game.GetTag("Event"); got != tt.wantEvent {
-					t.Errorf("game.GetTag(Event) = %q, want %q", got, tt.wantEvent)
-				}
-			}
-
-			if tt.wantWhite != "" {
-				if got := game.GetTag("White"); got != tt.wantWhite {
-					t.Errorf("game.GetTag(White) = %q, want %q", got, tt.wantWhite)
-				}
-			}
-
-			if tt.wantBlack != "" {
-				if got := game.GetTag("Black"); got != tt.wantBlack {
-					t.Errorf("game.GetTag(Black) = %q, want %q", got, tt.wantBlack)
-				}
-			}
-
-			if tt.wantResult != "" {
-				if got := game.GetTag("Result"); got != tt.wantResult {
-					t.Errorf("game.GetTag(Result) = %q, want %q", got, tt.wantResult)
-				}
-			}
+			assertTag(t, game, "Event", tt.wantEvent)
+			assertTag(t, game, "White", tt.wantWhite)
+			assertTag(t, game, "Black", tt.wantBlack)
+			assertTag(t, game, "Result", tt.wantResult)
 		})
 	}
 }
 
 func TestMustParseGame(t *testing.T) {
-	t.Run("valid game does not panic", func(t *testing.T) {
-		pgn := `[Event "Test"]
+	pgn := `[Event "Test"]
 [Site "Test"]
 [Date "2024.01.01"]
 [Round "1"]
@@ -147,18 +136,11 @@ func TestMustParseGame(t *testing.T) {
 [Result "*"]
 
 1. e4 e5 *`
-		// Should not panic
-		game := MustParseGame(t, pgn)
-		if game == nil {
-			t.Error("MustParseGame() returned nil for valid PGN")
-		}
-	})
-}
 
-func TestMustParseGame_Panics(t *testing.T) {
-	// We can't easily test that MustParseGame panics/fails the test
-	// because it calls t.Fatal, which we can't intercept.
-	// The TestMustParseGame test above verifies the happy path.
+	game := MustParseGame(t, pgn)
+	if game == nil {
+		t.Error("MustParseGame() returned nil for valid PGN")
+	}
 }
 
 func TestParseTestGames(t *testing.T) {

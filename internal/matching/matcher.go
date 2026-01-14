@@ -2,7 +2,6 @@
 package matching
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
@@ -87,7 +86,7 @@ func (c *CompositeMatcher) Name() string {
 		modeStr = "OR"
 	}
 
-	return fmt.Sprintf("CompositeMatcher(%s: %s)", modeStr, strings.Join(names, ", "))
+	return "CompositeMatcher(" + modeStr + ": " + strings.Join(names, ", ") + ")"
 }
 
 // Add adds a matcher to the composite.

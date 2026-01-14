@@ -3,6 +3,7 @@ package matching
 
 import (
 	"strings"
+	"unicode"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
 	"github.com/lgbarn/pgn-extract-go/internal/engine"
@@ -52,13 +53,7 @@ func (mm *MaterialMatcher) parsePieces(s string, color chess.Colour) {
 	}
 
 	for _, c := range s {
-		// Normalize to uppercase for matching
-		upper := c
-		if c >= 'a' && c <= 'z' {
-			upper = c - 32 // Convert to uppercase
-		}
-
-		switch upper {
+		switch unicode.ToUpper(c) {
 		case 'K':
 			target[chess.King]++
 		case 'Q':

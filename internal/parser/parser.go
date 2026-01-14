@@ -68,13 +68,10 @@ func (p *Parser) ParseGame() (*chess.Game, error) {
 	result := p.parseResult()
 	game.EndLine = p.lexer.LineNumber()
 
+	// Attach trailing comment and result to last move
 	if game.Moves != nil {
-		// Attach trailing comment and result to last move
-		lastMove := game.LastMove()
-		if lastMove != nil {
-			for _, c := range trailingComments {
-				lastMove.Comments = append(lastMove.Comments, c)
-			}
+		if lastMove := game.LastMove(); lastMove != nil {
+			lastMove.Comments = append(lastMove.Comments, trailingComments...)
 			if result != "" {
 				lastMove.TerminatingResult = result
 			}
@@ -111,12 +108,8 @@ func (p *Parser) skipToNextGame() {
 // parseOptTagList parses zero or more tags.
 func (p *Parser) parseOptTagList(game *chess.Game) {
 	for p.parseTag(game) {
-		// Continue parsing tags
 	}
-
-	// Parse any prefix comment
-	comments := p.parseOptCommentList()
-	game.PrefixComment = comments
+	game.PrefixComment = p.parseOptCommentList()
 }
 
 // parseTag parses a single tag.
@@ -170,28 +163,21 @@ func (p *Parser) parseMoveList() *chess.Move {
 // parseMoveAndVariants parses a move with its variations.
 func (p *Parser) parseMoveAndVariants() *chess.Move {
 	move := p.parseMove()
-	if move != nil {
-		// Parse variations
-		move.Variations = p.parseOptVariantList()
-
-		// Parse any trailing comments
-		comments := p.parseOptCommentList()
-		for _, c := range comments {
-			move.Comments = append(move.Comments, c)
-		}
+	if move == nil {
+		return nil
 	}
+
+	move.Variations = p.parseOptVariantList()
+	move.Comments = append(move.Comments, p.parseOptCommentList()...)
 	return move
 }
 
 // parseMove parses a single move.
 func (p *Parser) parseMove() *chess.Move {
-	// Skip optional move number
 	p.parseOptMoveNumber()
 
-	// Parse the actual move
 	move := p.parseMoveUnit()
 	if move != nil {
-		// Parse NAGs
 		p.parseOptNAGList(move)
 	}
 	return move
@@ -199,33 +185,26 @@ func (p *Parser) parseMove() *chess.Move {
 
 // parseMoveUnit parses the move itself.
 func (p *Parser) parseMoveUnit() *chess.Move {
-	if p.currentToken.Type == MoveToken {
-		move := p.currentToken.MoveDetails
-		p.nextToken()
-
-		// Handle check symbol
-		if p.currentToken.Type == CheckSymbol {
-			move.Text += "+"
-			p.nextToken()
-			// Sometimes + is followed by #
-			if p.currentToken.Type == CheckSymbol {
-				p.nextToken()
-			}
-		}
-
-		// Check for null move restriction
-		if move.Class == chess.NullMove && p.ravLevel == 0 {
-			if !p.cfg.AllowNullMoves {
-				fmt.Fprintf(p.cfg.LogFile, "Null moves (--) only allowed in variations.\n")
-			}
-		}
-
-		// Parse comments after the move
-		move.Comments = p.parseOptCommentList()
-
-		return move
+	if p.currentToken.Type != MoveToken {
+		return nil
 	}
-	return nil
+
+	move := p.currentToken.MoveDetails
+	p.nextToken()
+
+	// Handle check symbol (sometimes + is followed by #)
+	for p.currentToken.Type == CheckSymbol {
+		move.Text += "+"
+		p.nextToken()
+	}
+
+	// Check for null move restriction
+	if move.Class == chess.NullMove && p.ravLevel == 0 && !p.cfg.AllowNullMoves {
+		fmt.Fprintf(p.cfg.LogFile, "Null moves (--) only allowed in variations.\n")
+	}
+
+	move.Comments = p.parseOptCommentList()
+	return move
 }
 
 // parseOptCommentList parses zero or more comments.
@@ -265,12 +244,7 @@ func (p *Parser) parseOptNAGList(move *chess.Move) {
 			p.nextToken()
 		}
 
-		// Parse any comments following the NAGs
-		comments := p.parseOptCommentList()
-		for _, c := range comments {
-			nag.Comments = append(nag.Comments, c)
-		}
-
+		nag.Comments = append(nag.Comments, p.parseOptCommentList()...)
 		move.NAGs = append(move.NAGs, nag)
 	}
 }
@@ -299,36 +273,25 @@ func (p *Parser) parseVariant() *chess.Variation {
 	p.ravLevel++
 	p.nextToken()
 
-	variation := &chess.Variation{}
-
-	// Parse prefix comment
-	variation.PrefixComment = p.parseOptCommentList()
-
-	// Parse moves in variation
-	variation.Moves = p.parseMoveList()
+	variation := &chess.Variation{
+		PrefixComment: p.parseOptCommentList(),
+		Moves:         p.parseMoveList(),
+	}
 
 	if variation.Moves == nil {
 		fmt.Fprintf(p.cfg.LogFile, "Missing move list in variation.\n")
 	}
 
-	// Parse result in variation
-	result := p.parseResult()
-	if result != "" && variation.Moves != nil {
-		// Find last move and attach result
+	// Attach result and trailing comments to last move
+	if result := p.parseResult(); result != "" && variation.Moves != nil {
 		lastMove := variation.Moves
 		for lastMove.Next != nil {
 			lastMove = lastMove.Next
 		}
 		lastMove.TerminatingResult = result
-
-		// Handle trailing comment
-		trailingComment := p.parseOptCommentList()
-		for _, c := range trailingComment {
-			lastMove.Comments = append(lastMove.Comments, c)
-		}
+		lastMove.Comments = append(lastMove.Comments, p.parseOptCommentList()...)
 	}
 
-	// Expect RAV_END
 	if p.currentToken.Type == RAVEnd {
 		p.ravLevel--
 		p.nextToken()
@@ -336,9 +299,7 @@ func (p *Parser) parseVariant() *chess.Variation {
 		fmt.Fprintf(p.cfg.LogFile, "Missing ')' to close variation.\n")
 	}
 
-	// Parse suffix comment
 	variation.SuffixComment = p.parseOptCommentList()
-
 	return variation
 }
 

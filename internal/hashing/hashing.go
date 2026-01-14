@@ -7,22 +7,16 @@ import (
 
 // DuplicateDetector tracks seen positions for duplicate game detection.
 type DuplicateDetector struct {
-	// hashTable stores seen hash codes
-	hashTable map[uint64][]GameSignature
-	// useExactMatch uses full Zobrist hash (slower but more accurate)
-	useExactMatch bool
-	// duplicateCount tracks number of duplicates found
+	hashTable      map[uint64][]GameSignature
+	useExactMatch  bool
 	duplicateCount int
 }
 
 // GameSignature stores identifying information about a game.
 type GameSignature struct {
-	// Hash is the Zobrist hash of the final position
-	Hash uint64
-	// MoveCount is the number of half-moves in the game
+	Hash      uint64
 	MoveCount int
-	// WeakHash is a fast hash for quick comparison
-	WeakHash chess.HashCode
+	WeakHash  chess.HashCode
 }
 
 // NewDuplicateDetector creates a new duplicate detector.
@@ -67,21 +61,15 @@ func (d *DuplicateDetector) CheckAndAdd(game *chess.Game, board *chess.Board) bo
 
 // signaturesMatch checks if two game signatures match.
 func (d *DuplicateDetector) signaturesMatch(a, b GameSignature) bool {
-	// Primary check: Zobrist hash must match (already implied by hash table key)
 	if a.Hash != b.Hash {
 		return false
 	}
-
-	// Secondary check: weak hash for additional confidence
 	if a.WeakHash != b.WeakHash {
 		return false
 	}
-
-	// Optional: check move count
 	if d.useExactMatch && a.MoveCount != b.MoveCount {
 		return false
 	}
-
 	return true
 }
 
@@ -152,11 +140,10 @@ func (gh *GameHasher) HashGame(game *chess.Game, board *chess.Board) uint64 {
 
 // hashMoveSequence creates a hash from the move texts.
 func (gh *GameHasher) hashMoveSequence(game *chess.Game) uint64 {
-	var hash uint64 = 0
-	multiplier := uint64(31)
+	var hash uint64
+	const multiplier = 31
 
 	for move := game.Moves; move != nil; move = move.Next {
-		// Simple string hash for move text
 		for _, c := range move.Text {
 			hash = hash*multiplier + uint64(c)
 		}

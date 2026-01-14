@@ -4,8 +4,23 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lgbarn/pgn-extract-go/internal/chess"
 	"github.com/lgbarn/pgn-extract-go/internal/config"
 )
+
+// parseTestGame is a helper that parses a PGN string and returns the game.
+func parseTestGame(t *testing.T, pgn string) *chess.Game {
+	t.Helper()
+	p := NewParser(strings.NewReader(pgn), config.NewConfig())
+	game, err := p.ParseGame()
+	if err != nil {
+		t.Fatalf("ParseGame error: %v", err)
+	}
+	if game == nil {
+		t.Fatal("Expected game, got nil")
+	}
+	return game
+}
 
 func TestParseSimpleGame(t *testing.T) {
 	pgn := `[Event "Test"]
@@ -19,42 +34,28 @@ func TestParseSimpleGame(t *testing.T) {
 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0
 `
 
-	cfg := config.NewConfig()
-	p := NewParser(strings.NewReader(pgn), cfg)
-
-	game, err := p.ParseGame()
-	if err != nil {
-		t.Fatalf("ParseGame error: %v", err)
-	}
-	if game == nil {
-		t.Fatal("Expected game, got nil")
-	}
+	game := parseTestGame(t, pgn)
 
 	// Check tags
-	if game.GetTag("Event") != "Test" {
-		t.Errorf("Expected Event='Test', got '%s'", game.GetTag("Event"))
+	if got := game.GetTag("Event"); got != "Test" {
+		t.Errorf("Event = %q, want %q", got, "Test")
 	}
-	if game.GetTag("White") != "Player1" {
-		t.Errorf("Expected White='Player1', got '%s'", game.GetTag("White"))
+	if got := game.GetTag("White"); got != "Player1" {
+		t.Errorf("White = %q, want %q", got, "Player1")
 	}
-	if game.GetTag("Black") != "Player2" {
-		t.Errorf("Expected Black='Player2', got '%s'", game.GetTag("Black"))
+	if got := game.GetTag("Black"); got != "Player2" {
+		t.Errorf("Black = %q, want %q", got, "Player2")
 	}
 
 	// Check moves
 	if game.Moves == nil {
 		t.Fatal("Expected moves, got nil")
 	}
-
-	// Count moves
-	count := game.PlyCount()
-	if count != 6 {
-		t.Errorf("Expected 6 plies, got %d", count)
+	if count := game.PlyCount(); count != 6 {
+		t.Errorf("PlyCount = %d, want 6", count)
 	}
-
-	// Check first move
-	if game.Moves.Text != "e4" {
-		t.Errorf("Expected first move 'e4', got '%s'", game.Moves.Text)
+	if got := game.Moves.Text; got != "e4" {
+		t.Errorf("First move = %q, want %q", got, "e4")
 	}
 
 	// Check result
@@ -62,34 +63,20 @@ func TestParseSimpleGame(t *testing.T) {
 	if lastMove == nil {
 		t.Fatal("Expected last move, got nil")
 	}
-	if lastMove.TerminatingResult != "1-0" {
-		t.Errorf("Expected result '1-0', got '%s'", lastMove.TerminatingResult)
+	if got := lastMove.TerminatingResult; got != "1-0" {
+		t.Errorf("Result = %q, want %q", got, "1-0")
 	}
 }
 
 func TestParseFoolsMate(t *testing.T) {
-	// Fool's mate - shortest possible checkmate
 	pgn := `1. f3 e5 2. g4 Qh4# 0-1`
+	game := parseTestGame(t, pgn)
 
-	cfg := config.NewConfig()
-	p := NewParser(strings.NewReader(pgn), cfg)
-
-	game, err := p.ParseGame()
-	if err != nil {
-		t.Fatalf("ParseGame error: %v", err)
+	if count := game.PlyCount(); count != 4 {
+		t.Errorf("PlyCount = %d, want 4", count)
 	}
-	if game == nil {
-		t.Fatal("Expected game, got nil")
-	}
-
-	count := game.PlyCount()
-	if count != 4 {
-		t.Errorf("Expected 4 plies, got %d", count)
-	}
-
-	lastMove := game.LastMove()
-	if lastMove.TerminatingResult != "0-1" {
-		t.Errorf("Expected result '0-1', got '%s'", lastMove.TerminatingResult)
+	if got := game.LastMove().TerminatingResult; got != "0-1" {
+		t.Errorf("Result = %q, want %q", got, "0-1")
 	}
 }
 
@@ -102,22 +89,13 @@ func TestParseWithComments(t *testing.T) {
 1. e4 {Best by test} e5 2. Nf3 Nc6 *
 `
 
-	cfg := config.NewConfig()
-	p := NewParser(strings.NewReader(pgn), cfg)
+	game := parseTestGame(t, pgn)
 
-	game, err := p.ParseGame()
-	if err != nil {
-		t.Fatalf("ParseGame error: %v", err)
-	}
-	if game == nil {
-		t.Fatal("Expected game, got nil")
-	}
-
-	// Check first move has comment
 	if len(game.Moves.Comments) == 0 {
-		t.Error("Expected comment on first move")
-	} else if game.Moves.Comments[0].Text != "Best by test" {
-		t.Errorf("Expected comment 'Best by test', got '%s'", game.Moves.Comments[0].Text)
+		t.Fatal("Expected comment on first move")
+	}
+	if got := game.Moves.Comments[0].Text; got != "Best by test" {
+		t.Errorf("Comment = %q, want %q", got, "Best by test")
 	}
 }
 
@@ -128,23 +106,13 @@ func TestParseWithVariations(t *testing.T) {
 1. e4 e5 (1... c5 2. Nf3) 2. Nf3 *
 `
 
-	cfg := config.NewConfig()
-	p := NewParser(strings.NewReader(pgn), cfg)
+	game := parseTestGame(t, pgn)
 
-	game, err := p.ParseGame()
-	if err != nil {
-		t.Fatalf("ParseGame error: %v", err)
-	}
-	if game == nil {
-		t.Fatal("Expected game, got nil")
-	}
-
-	// Check second ply (e5) has a variation
 	if game.Moves == nil || game.Moves.Next == nil {
 		t.Fatal("Expected at least 2 moves")
 	}
 
-	e5 := game.Moves.Next // 1...e5
+	e5 := game.Moves.Next
 	if len(e5.Variations) == 0 {
 		t.Error("Expected variation on 1...e5")
 	}
@@ -163,18 +131,8 @@ func TestParseCastling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := config.NewConfig()
-			p := NewParser(strings.NewReader(tt.pgn), cfg)
+			game := parseTestGame(t, tt.pgn)
 
-			game, err := p.ParseGame()
-			if err != nil {
-				t.Fatalf("ParseGame error: %v", err)
-			}
-			if game == nil {
-				t.Fatal("Expected game, got nil")
-			}
-
-			// Find the castling move
 			found := false
 			for move := game.Moves; move != nil; move = move.Next {
 				if move.Text == tt.expected || move.Text == "0-0" || move.Text == "0-0-0" {
@@ -183,7 +141,7 @@ func TestParseCastling(t *testing.T) {
 				}
 			}
 			if !found {
-				t.Errorf("Expected to find castling move %s", tt.expected)
+				t.Errorf("Expected castling move %s not found", tt.expected)
 			}
 		})
 	}
@@ -201,23 +159,20 @@ func TestParseMultipleGames(t *testing.T) {
 1. d4 d5 0-1
 `
 
-	cfg := config.NewConfig()
-	p := NewParser(strings.NewReader(pgn), cfg)
-
+	p := NewParser(strings.NewReader(pgn), config.NewConfig())
 	games, err := p.ParseAllGames()
 	if err != nil {
 		t.Fatalf("ParseAllGames error: %v", err)
 	}
 
 	if len(games) != 2 {
-		t.Fatalf("Expected 2 games, got %d", len(games))
+		t.Fatalf("len(games) = %d, want 2", len(games))
 	}
-
-	if games[0].GetTag("Event") != "Game 1" {
-		t.Errorf("Expected first game Event='Game 1', got '%s'", games[0].GetTag("Event"))
+	if got := games[0].GetTag("Event"); got != "Game 1" {
+		t.Errorf("games[0].Event = %q, want %q", got, "Game 1")
 	}
-	if games[1].GetTag("Event") != "Game 2" {
-		t.Errorf("Expected second game Event='Game 2', got '%s'", games[1].GetTag("Event"))
+	if got := games[1].GetTag("Event"); got != "Game 2" {
+		t.Errorf("games[1].Event = %q, want %q", got, "Game 2")
 	}
 }
 
@@ -227,18 +182,8 @@ func TestParseNAGs(t *testing.T) {
 1. e4! e5? 2. Nf3!! Nc6?? *
 `
 
-	cfg := config.NewConfig()
-	p := NewParser(strings.NewReader(pgn), cfg)
+	game := parseTestGame(t, pgn)
 
-	game, err := p.ParseGame()
-	if err != nil {
-		t.Fatalf("ParseGame error: %v", err)
-	}
-	if game == nil {
-		t.Fatal("Expected game, got nil")
-	}
-
-	// First move should have NAG
 	if len(game.Moves.NAGs) == 0 {
 		t.Error("Expected NAG on first move (e4!)")
 	}

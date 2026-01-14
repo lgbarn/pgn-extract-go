@@ -22,22 +22,17 @@ func (e *Evaluator) evalPiece(args []Node) bool {
 		return false
 	}
 
-	// Get squares to check
 	squares := e.parseSquareSet(squareArg.Designator)
 	if len(squares) == 0 {
 		return false
 	}
 
-	// Get pieces to match
 	pieces := e.parsePieceDesignator(pieceArg.Designator)
 
-	// Check if any piece matches on any square
 	for _, sq := range squares {
 		piece := e.getPieceAt(sq.col, sq.rank)
-		for _, p := range pieces {
-			if piece == p {
-				return true
-			}
+		if containsPiece(pieces, piece) {
+			return true
 		}
 	}
 
@@ -60,12 +55,8 @@ func (e *Evaluator) evalCount(args []Node) int {
 
 	for rank := chess.Rank(0); rank < 8; rank++ {
 		for col := chess.Col(0); col < 8; col++ {
-			piece := e.getPieceAt(col, rank)
-			for _, p := range pieces {
-				if piece == p {
-					count++
-					break
-				}
+			if containsPiece(pieces, e.getPieceAt(col, rank)) {
+				count++
 			}
 		}
 	}
@@ -117,16 +108,13 @@ func (e *Evaluator) evalMaterial(args []Node) int {
 			pieceType := chess.ExtractPiece(piece)
 			switch pieceType {
 			case chess.Pawn:
-				material += 1
-			case chess.Knight:
-				material += 3
-			case chess.Bishop:
+				material++
+			case chess.Knight, chess.Bishop:
 				material += 3
 			case chess.Rook:
 				material += 5
 			case chess.Queen:
 				material += 9
-				// King has no material value
 			}
 		}
 	}

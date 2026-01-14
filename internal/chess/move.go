@@ -96,7 +96,12 @@ func (m *Move) IsPromotion() bool {
 
 // IsCastle returns true if this move is a castling move.
 func (m *Move) IsCastle() bool {
-	return m.Class == KingsideCastle || m.Class == QueensideCastle
+	switch m.Class {
+	case KingsideCastle, QueensideCastle:
+		return true
+	default:
+		return false
+	}
 }
 
 // IsNull returns true if this is a null move.

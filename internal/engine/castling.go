@@ -5,33 +5,17 @@ import "github.com/lgbarn/pgn-extract-go/internal/chess"
 // applyCastle applies a castling move.
 func applyCastle(board *chess.Board, kingside bool) bool {
 	colour := board.ToMove
-	var rank chess.Rank
-	var kingFromCol, kingToCol, rookFromCol, rookToCol chess.Col
+	rank, kingFromCol, kingSideCastle, queenSideCastle := getCastlingInfo(board, colour)
 
-	if colour == chess.White {
-		rank = '1'
-		kingFromCol = board.WKingCol
-		if kingside {
-			kingToCol = 'g'
-			rookFromCol = board.WKingCastle
-			rookToCol = 'f'
-		} else {
-			kingToCol = 'c'
-			rookFromCol = board.WQueenCastle
-			rookToCol = 'd'
-		}
+	var kingToCol, rookFromCol, rookToCol chess.Col
+	if kingside {
+		kingToCol = 'g'
+		rookFromCol = kingSideCastle
+		rookToCol = 'f'
 	} else {
-		rank = '8'
-		kingFromCol = board.BKingCol
-		if kingside {
-			kingToCol = 'g'
-			rookFromCol = board.BKingCastle
-			rookToCol = 'f'
-		} else {
-			kingToCol = 'c'
-			rookFromCol = board.BQueenCastle
-			rookToCol = 'd'
-		}
+		kingToCol = 'c'
+		rookFromCol = queenSideCastle
+		rookToCol = 'd'
 	}
 
 	// Move king
@@ -44,7 +28,7 @@ func applyCastle(board *chess.Board, kingside bool) bool {
 	board.Set(rookFromCol, rank, chess.Empty)
 	board.Set(rookToCol, rank, rook)
 
-	// Update king position
+	// Update king position and remove castling rights
 	if colour == chess.White {
 		board.WKingCol = kingToCol
 		board.WKingCastle = 0
@@ -63,6 +47,14 @@ func applyCastle(board *chess.Board, kingside bool) bool {
 	board.ToMove = colour.Opposite()
 
 	return true
+}
+
+// getCastlingInfo returns castling-related board state for a colour.
+func getCastlingInfo(board *chess.Board, colour chess.Colour) (rank chess.Rank, kingCol, kingSideCastle, queenSideCastle chess.Col) {
+	if colour == chess.White {
+		return '1', board.WKingCol, board.WKingCastle, board.WQueenCastle
+	}
+	return '8', board.BKingCol, board.BKingCastle, board.BQueenCastle
 }
 
 // updateCastlingRightsForRook removes castling rights when a rook moves or is captured.

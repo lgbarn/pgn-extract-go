@@ -24,12 +24,7 @@ type DuplicateConfig struct {
 }
 
 // NewDuplicateConfig creates a DuplicateConfig with default values.
+// All fields use Go zero values (false, 0, nil).
 func NewDuplicateConfig() *DuplicateConfig {
-	return &DuplicateConfig{
-		Suppress:            false,
-		SuppressOriginals:   false,
-		FuzzyMatch:          false,
-		FuzzyDepth:          0,
-		UseVirtualHashTable: false,
-	}
+	return &DuplicateConfig{}
 }

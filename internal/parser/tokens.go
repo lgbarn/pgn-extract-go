@@ -41,19 +41,43 @@ const (
 	ErrorToken
 )
 
+// tokenTypeNames maps token types to their string representations.
+var tokenTypeNames = [...]string{
+	EOFToken:          "EOF",
+	TagToken:          "TAG",
+	StringToken:       "STRING",
+	CommentToken:      "COMMENT",
+	NAGToken:          "NAG",
+	CheckSymbol:       "CHECK_SYMBOL",
+	MoveNumber:        "MOVE_NUMBER",
+	RAVStart:          "RAV_START",
+	RAVEnd:            "RAV_END",
+	MoveToken:         "MOVE",
+	TerminatingResult: "TERMINATING_RESULT",
+	Whitespace:        "WHITESPACE",
+	TagStart:          "TAG_START",
+	TagEnd:            "TAG_END",
+	DoubleQuote:       "DOUBLE_QUOTE",
+	CommentStart:      "COMMENT_START",
+	CommentEnd:        "COMMENT_END",
+	Annotate:          "ANNOTATE",
+	Dot:               "DOT",
+	Percent:           "PERCENT",
+	Escape:            "ESCAPE",
+	Alpha:             "ALPHA",
+	Digit:             "DIGIT",
+	Star:              "STAR",
+	Dash:              "DASH",
+	EOS:               "EOS",
+	Operator:          "OPERATOR",
+	NoToken:           "NO_TOKEN",
+	ErrorToken:        "ERROR_TOKEN",
+}
+
 // String returns the string representation of a token type.
 func (t TokenType) String() string {
-	names := []string{
-		"EOF", "TAG", "STRING", "COMMENT", "NAG",
-		"CHECK_SYMBOL", "MOVE_NUMBER", "RAV_START", "RAV_END",
-		"MOVE", "TERMINATING_RESULT",
-		"WHITESPACE", "TAG_START", "TAG_END", "DOUBLE_QUOTE",
-		"COMMENT_START", "COMMENT_END", "ANNOTATE",
-		"DOT", "PERCENT", "ESCAPE", "ALPHA", "DIGIT",
-		"STAR", "DASH", "EOS", "OPERATOR", "NO_TOKEN", "ERROR_TOKEN",
-	}
-	if int(t) < len(names) {
-		return names[t]
+	if int(t) < len(tokenTypeNames) {
+		return tokenTypeNames[t]
 	}
 	return "UNKNOWN"
 }

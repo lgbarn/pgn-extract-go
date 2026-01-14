@@ -146,16 +146,14 @@ func (e *Evaluator) evalNumeric(node Node) int {
 	case *NumberNode:
 		return n.Value
 	case *FilterNode:
-		if n.Name == "count" {
+		switch n.Name {
+		case "count":
 			return e.evalCount(n.Args)
-		}
-		if n.Name == "material" {
+		case "material":
 			return e.evalMaterial(n.Args)
-		}
-		if n.Name == "year" {
+		case "year":
 			return e.evalYear()
-		}
-		if n.Name == "elo" {
+		case "elo":
 			return e.evalElo(n.Args)
 		}
 	}

@@ -40,15 +40,14 @@ func init() {
 // initLexTables initializes the character classification tables.
 func initLexTables() {
 	// Initialize all to error
-	for i := 0; i < 256; i++ {
+	for i := range chTab {
 		chTab[i] = ErrorToken
 	}
 
 	// Whitespace
-	chTab[' '] = Whitespace
-	chTab['\t'] = Whitespace
-	chTab['\r'] = Whitespace // DOS line-ends
-	chTab['\n'] = Whitespace // Unix line-ends
+	for _, c := range []byte{' ', '\t', '\r', '\n'} {
+		chTab[c] = Whitespace
+	}
 
 	// Brackets and quotes
 	chTab['['] = TagStart
@@ -73,76 +72,56 @@ func initLexTables() {
 	chTab['-'] = Dash
 
 	// Operators (only allowed in tag files)
-	chTab['<'] = Operator
-	chTab['>'] = Operator
-	chTab['='] = Operator
-
-	// Digits
-	for i := '0'; i <= '9'; i++ {
-		chTab[i] = Digit
+	for _, c := range []byte{'<', '>', '='} {
+		chTab[c] = Operator
 	}
 
-	// Alpha characters
-	for i := 'A'; i <= 'Z'; i++ {
-		chTab[i] = Alpha
-		chTab[i+32] = Alpha // lowercase
+	// Digits
+	for c := byte('0'); c <= '9'; c++ {
+		chTab[c] = Digit
+	}
+
+	// Alpha characters (upper and lowercase)
+	for c := byte('A'); c <= 'Z'; c++ {
+		chTab[c] = Alpha
+		chTab[c+32] = Alpha
 	}
 	chTab['_'] = Alpha
 
 	// Russian piece letters
-	chTab[RussianKnightOrKing] = Alpha
-	chTab[RussianKingSecondLetter] = Alpha
-	chTab[RussianQueen] = Alpha
-	chTab[RussianRook] = Alpha
-	chTab[RussianBishop] = Alpha
-
-	// Initialize MoveChars
-	for i := 0; i < 256; i++ {
-		moveChars[i] = false
+	for _, c := range []byte{RussianKnightOrKing, RussianKingSecondLetter, RussianQueen, RussianRook, RussianBishop} {
+		chTab[c] = Alpha
 	}
 
-	// Files (a-h)
-	for i := 'a'; i <= 'h'; i++ {
-		moveChars[i] = true
-	}
+	// Initialize move character table
+	initMoveChars()
+}
 
-	// Ranks (1-8)
-	for i := '1'; i <= '8'; i++ {
-		moveChars[i] = true
+// initMoveChars initializes the move character classification table.
+func initMoveChars() {
+	// Files (a-h) and ranks (1-8)
+	for c := byte('a'); c <= 'h'; c++ {
+		moveChars[c] = true
 	}
-
-	// Piece letters (English, upper and lower)
-	for _, c := range []byte{'K', 'Q', 'R', 'N', 'B', 'k', 'q', 'r', 'n', 'b'} {
+	for c := byte('1'); c <= '8'; c++ {
 		moveChars[c] = true
 	}
 
-	// Dutch/German piece letters
-	for _, c := range []byte{'D', 'T', 'S', 'P', 'L'} {
+	// Piece letters: English (upper/lower), Dutch/German, Russian
+	pieceChars := []byte{
+		'K', 'Q', 'R', 'N', 'B', 'k', 'q', 'r', 'n', 'b', // English
+		'D', 'T', 'S', 'P', 'L', // Dutch/German
+		RussianKnightOrKing, RussianKingSecondLetter, RussianQueen, RussianRook, RussianBishop,
+	}
+	for _, c := range pieceChars {
 		moveChars[c] = true
 	}
 
-	// Russian characters
-	moveChars[RussianKnightOrKing] = true
-	moveChars[RussianKingSecondLetter] = true
-	moveChars[RussianQueen] = true
-	moveChars[RussianRook] = true
-	moveChars[RussianBishop] = true
-
-	// Capture and square separators
-	for _, c := range []byte{'x', 'X', ':', '-'} {
+	// Capture/separators, promotion, castling, en passant
+	specialChars := []byte{'x', 'X', ':', '-', '=', 'O', 'o', '0', 'p'}
+	for _, c := range specialChars {
 		moveChars[c] = true
 	}
-
-	// Promotion character
-	moveChars['='] = true
-
-	// Castling
-	for _, c := range []byte{'O', 'o', '0'} {
-		moveChars[c] = true
-	}
-
-	// Allow trailing 'p' for e.p.
-	moveChars['p'] = true
 }
 
 // NewLexer creates a new lexer for the given reader.
@@ -162,15 +141,11 @@ func NewLexer(r io.Reader, cfg *config.Config) *Lexer {
 func (l *Lexer) readLine() bool {
 	line, err := l.reader.ReadString('\n')
 	if err != nil {
-		if err == io.EOF {
-			if len(line) > 0 {
-				l.line = line
-				l.pos = 0
-				l.lineNum++
-				return true
-			}
-			l.eof = true
-			return false
+		if err == io.EOF && len(line) > 0 {
+			l.line = line
+			l.pos = 0
+			l.lineNum++
+			return true
 		}
 		l.eof = true
 		return false
@@ -318,12 +293,7 @@ func (l *Lexer) getNextSymbol() *Token {
 	case Dash:
 		if l.pos < len(l.line) && chTab[l.currentChar()] == Dash {
 			l.advance()
-			// Null move "--"
-			move := chess.NewMove()
-			move.Text = chess.NullMoveString
-			move.Class = chess.NullMove
-			l.lastMove = chess.NullMoveString
-			return &Token{Type: MoveToken, MoveDetails: move}
+			return l.makeNullMoveToken()
 		}
 		fmt.Fprintf(l.cfg.LogFile, "Single '-' not allowed on line %d.\n", l.lineNum)
 		return &Token{Type: NoToken}
@@ -431,26 +401,23 @@ func (l *Lexer) gatherComment() *Token {
 			ch := l.currentChar()
 			l.advance()
 
-			if ch == '{' && l.cfg.AllowNestedComments {
+			switch {
+			case ch == '{' && l.cfg.AllowNestedComments:
 				l.commentDepth++
 				sb.WriteByte(ch)
-			} else if ch == '}' {
+			case ch == '}':
 				if l.cfg.AllowNestedComments && l.commentDepth > 1 {
 					l.commentDepth--
 					sb.WriteByte(ch)
 				} else {
 					l.commentDepth--
-					// Trim spaces
-					text := strings.TrimSpace(sb.String())
-					comments := []*chess.Comment{{Text: text}}
-					return &Token{Type: CommentToken, Comments: comments}
+					return l.makeCommentToken(sb.String())
 				}
-			} else {
+			default:
 				sb.WriteByte(ch)
 			}
 		}
 
-		// Need another line
 		if !l.readLine() {
 			break
 		}
@@ -461,9 +428,15 @@ func (l *Lexer) gatherComment() *Token {
 		fmt.Fprintf(l.cfg.LogFile, "Missing end of comment.\n")
 	}
 
-	text := strings.TrimSpace(sb.String())
-	comments := []*chess.Comment{{Text: text}}
-	return &Token{Type: CommentToken, Comments: comments}
+	return l.makeCommentToken(sb.String())
+}
+
+// makeCommentToken creates a comment token from the given text.
+func (l *Lexer) makeCommentToken(text string) *Token {
+	return &Token{
+		Type:     CommentToken,
+		Comments: []*chess.Comment{{Text: strings.TrimSpace(text)}},
+	}
 }
 
 // gatherAlpha handles alpha characters (potential moves).
@@ -471,14 +444,9 @@ func (l *Lexer) gatherAlpha(ch byte, symbolStart int) *Token {
 	// Check for null move Z0
 	if ch == 'Z' && l.pos < len(l.line) && l.currentChar() == '0' {
 		l.advance()
-		move := chess.NewMove()
-		move.Text = chess.NullMoveString
-		move.Class = chess.NullMove
-		l.lastMove = chess.NullMoveString
-		return &Token{Type: MoveToken, MoveDetails: move}
+		return l.makeNullMoveToken()
 	}
 
-	// Check if it's a move character
 	if !moveChars[ch] {
 		if !l.cfg.SkippingCurrentGame {
 			fmt.Fprintf(l.cfg.LogFile, "Unknown character %c (0x%x) on line %d.\n", ch, ch, l.lineNum)
@@ -493,10 +461,8 @@ func (l *Lexer) gatherAlpha(ch byte, symbolStart int) *Token {
 
 	moveText := l.line[symbolStart:l.pos]
 
-	// Validate and decode the move
 	if moveSeemValid(moveText) {
-		move := DecodeMove(moveText)
-		if move != nil {
+		if move := DecodeMove(moveText); move != nil {
 			l.lastMove = moveText
 			return &Token{Type: MoveToken, MoveDetails: move}
 		}
@@ -508,42 +474,41 @@ func (l *Lexer) gatherAlpha(ch byte, symbolStart int) *Token {
 	return &Token{Type: NoToken}
 }
 
+// makeNullMoveToken creates a token for a null move.
+func (l *Lexer) makeNullMoveToken() *Token {
+	move := chess.NewMove()
+	move.Text = chess.NullMoveString
+	move.Class = chess.NullMove
+	l.lastMove = chess.NullMoveString
+	return &Token{Type: MoveToken, MoveDetails: move}
+}
+
 // gatherNumeric handles numeric tokens (move numbers, results, castling).
 func (l *Lexer) gatherNumeric(initialDigit byte) *Token {
-	if initialDigit == '0' {
+	remaining := l.line[l.pos:]
+
+	switch initialDigit {
+	case '0':
 		// Could be 0-1 (result) or 0-0 / 0-0-0 (castling)
-		remaining := l.line[l.pos:]
 		if strings.HasPrefix(remaining, "-1") {
 			l.pos += 2
 			return &Token{Type: TerminatingResult, TokenString: "0-1"}
 		}
 		if strings.HasPrefix(remaining, "-0-0") {
 			l.pos += 4
-			move := chess.NewMove()
-			move.Text = "O-O-O"
-			move.Class = chess.QueensideCastle
-			move.PieceToMove = chess.King
-			l.lastMove = "O-O-O"
-			return &Token{Type: MoveToken, MoveDetails: move}
+			return l.makeCastleToken("O-O-O", chess.QueensideCastle)
 		}
 		if strings.HasPrefix(remaining, "-0") {
 			l.pos += 2
-			move := chess.NewMove()
-			move.Text = "O-O"
-			move.Class = chess.KingsideCastle
-			move.PieceToMove = chess.King
-			l.lastMove = "O-O"
-			return &Token{Type: MoveToken, MoveDetails: move}
+			return l.makeCastleToken("O-O", chess.KingsideCastle)
 		}
-	} else if initialDigit == '1' {
-		remaining := l.line[l.pos:]
+	case '1':
 		if strings.HasPrefix(remaining, "-0") {
 			l.pos += 2
 			return &Token{Type: TerminatingResult, TokenString: "1-0"}
 		}
 		if strings.HasPrefix(remaining, "/2") {
 			l.pos += 2
-			// Check for full form 1/2-1/2
 			if strings.HasPrefix(l.line[l.pos:], "-1/2") {
 				l.pos += 4
 			}
@@ -551,7 +516,21 @@ func (l *Lexer) gatherNumeric(initialDigit byte) *Token {
 		}
 	}
 
-	// Move number - gather remaining digits
+	return l.gatherMoveNumber(initialDigit)
+}
+
+// makeCastleToken creates a castling move token.
+func (l *Lexer) makeCastleToken(text string, class chess.MoveClass) *Token {
+	move := chess.NewMove()
+	move.Text = text
+	move.Class = class
+	move.PieceToMove = chess.King
+	l.lastMove = text
+	return &Token{Type: MoveToken, MoveDetails: move}
+}
+
+// gatherMoveNumber parses a move number token.
+func (l *Lexer) gatherMoveNumber(initialDigit byte) *Token {
 	start := l.pos - 1
 	for l.pos < len(l.line) && unicode.IsDigit(rune(l.currentChar())) {
 		l.advance()
@@ -562,10 +541,7 @@ func (l *Lexer) gatherNumeric(initialDigit byte) *Token {
 		l.advance()
 	}
 
-	numStr := l.line[start:l.pos]
-	// Remove trailing dots from numStr for parsing
-	numStr = strings.TrimRight(numStr, ".")
-
+	numStr := strings.TrimRight(l.line[start:l.pos], ".")
 	var moveNum uint
 	fmt.Sscanf(numStr, "%d", &moveNum)
 

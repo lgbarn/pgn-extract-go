@@ -1,8 +1,6 @@
 package chess
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestNewBoard(t *testing.T) {
 	b := NewBoard()

@@ -6,8 +6,7 @@ import (
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
 )
 
-func TestZobristHashConsistency(t *testing.T) {
-	// Create two identical boards and verify they produce the same hash
+func TestZobristHash_IdenticalBoards_SameHash(t *testing.T) {
 	board1 := chess.NewBoard()
 	board1.SetupInitialPosition()
 
@@ -22,15 +21,12 @@ func TestZobristHashConsistency(t *testing.T) {
 	}
 }
 
-func TestZobristHashDifferentPositions(t *testing.T) {
-	// Initial position
+func TestZobristHash_DifferentPositions_DifferentHash(t *testing.T) {
 	board1 := chess.NewBoard()
 	board1.SetupInitialPosition()
 
-	// Modified position (move a pawn)
 	board2 := chess.NewBoard()
 	board2.SetupInitialPosition()
-	// Manually move e2 to e4
 	board2.Set('e', '2', chess.Empty)
 	board2.Set('e', '4', chess.W(chess.Pawn))
 
@@ -42,7 +38,7 @@ func TestZobristHashDifferentPositions(t *testing.T) {
 	}
 }
 
-func TestWeakHashConsistency(t *testing.T) {
+func TestWeakHash_IdenticalBoards_SameHash(t *testing.T) {
 	board1 := chess.NewBoard()
 	board1.SetupInitialPosition()
 
@@ -57,7 +53,7 @@ func TestWeakHashConsistency(t *testing.T) {
 	}
 }
 
-func TestDuplicateDetector(t *testing.T) {
+func TestDuplicateDetector_CheckAndAdd(t *testing.T) {
 	detector := NewDuplicateDetector(false)
 
 	board := chess.NewBoard()
@@ -68,12 +64,10 @@ func TestDuplicateDetector(t *testing.T) {
 		Moves: nil,
 	}
 
-	// First game should not be a duplicate
 	if detector.CheckAndAdd(game, board) {
 		t.Error("First game was marked as duplicate")
 	}
 
-	// Same game should be a duplicate
 	if !detector.CheckAndAdd(game, board) {
 		t.Error("Duplicate game was not detected")
 	}
@@ -83,28 +77,19 @@ func TestDuplicateDetector(t *testing.T) {
 	}
 }
 
-func TestDuplicateDetectorDifferentGames(t *testing.T) {
+func TestDuplicateDetector_DifferentGames(t *testing.T) {
 	detector := NewDuplicateDetector(false)
 
-	// Game 1 - initial position
 	board1 := chess.NewBoard()
 	board1.SetupInitialPosition()
-	game1 := &chess.Game{
-		Tags:  make(map[string]string),
-		Moves: nil,
-	}
+	game1 := &chess.Game{Tags: make(map[string]string)}
 
-	// Game 2 - different position
 	board2 := chess.NewBoard()
 	board2.SetupInitialPosition()
 	board2.Set('e', '2', chess.Empty)
 	board2.Set('e', '4', chess.W(chess.Pawn))
-	game2 := &chess.Game{
-		Tags:  make(map[string]string),
-		Moves: nil,
-	}
+	game2 := &chess.Game{Tags: make(map[string]string)}
 
-	// Neither should be duplicates
 	if detector.CheckAndAdd(game1, board1) {
 		t.Error("Game 1 was incorrectly marked as duplicate")
 	}
@@ -122,15 +107,12 @@ func TestDuplicateDetectorDifferentGames(t *testing.T) {
 	}
 }
 
-func TestDuplicateDetectorReset(t *testing.T) {
+func TestDuplicateDetector_Reset(t *testing.T) {
 	detector := NewDuplicateDetector(false)
 
 	board := chess.NewBoard()
 	board.SetupInitialPosition()
-	game := &chess.Game{
-		Tags:  make(map[string]string),
-		Moves: nil,
-	}
+	game := &chess.Game{Tags: make(map[string]string)}
 
 	detector.CheckAndAdd(game, board)
 	detector.CheckAndAdd(game, board)
@@ -150,7 +132,7 @@ func TestDuplicateDetectorReset(t *testing.T) {
 	}
 }
 
-func TestSideToMoveAffectsHash(t *testing.T) {
+func TestZobristHash_DifferentSideToMove_DifferentHash(t *testing.T) {
 	board1 := chess.NewBoard()
 	board1.SetupInitialPosition()
 	board1.ToMove = chess.White

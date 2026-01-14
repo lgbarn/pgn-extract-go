@@ -247,91 +247,97 @@ func (p *Parser) parseComparison() (Node, error) {
 	}, nil
 }
 
+// filterNames contains all known CQL filter names.
+var filterNames = map[string]bool{
+	"piece":           true,
+	"attack":          true,
+	"check":           true,
+	"mate":            true,
+	"stalemate":       true,
+	"wtm":             true,
+	"btm":             true,
+	"count":           true,
+	"material":        true,
+	"result":          true,
+	"player":          true,
+	"elo":             true,
+	"year":            true,
+	"pin":             true,
+	"ray":             true,
+	"between":         true,
+	"flip":            true,
+	"flipvertical":    true,
+	"flipcolor":       true,
+	"shift":           true,
+	"shifthorizontal": true,
+	"shiftvertical":   true,
+	"controls":        true,
+	"power":           true,
+	// Direction keywords for ray
+	"horizontal": true,
+	"vertical":   true,
+	"diagonal":   true,
+	"orthogonal": true,
+	// Color keywords for elo
+	"white": true,
+	"black": true,
+}
+
+// zeroArgFilters contains filters that take no arguments.
+var zeroArgFilters = map[string]bool{
+	"check":     true,
+	"mate":      true,
+	"stalemate": true,
+	"wtm":       true,
+	"btm":       true,
+	"year":      true,
+	// Direction keywords are zero-arg identifiers used as arguments
+	"horizontal": true,
+	"vertical":   true,
+	"diagonal":   true,
+	"orthogonal": true,
+	"white":      true,
+	"black":      true,
+}
+
+// filterArgCounts maps filter names to their expected argument counts.
+var filterArgCounts = map[string]int{
+	"piece":           2,
+	"attack":          2,
+	"count":           1,
+	"material":        1,
+	"result":          1,
+	"player":          1,
+	"elo":             3,
+	"year":            2,
+	"pin":             3,
+	"ray":             4,
+	"between":         2,
+	"flip":            1,
+	"flipvertical":    1,
+	"flipcolor":       1,
+	"shift":           1,
+	"shifthorizontal": 1,
+	"shiftvertical":   1,
+	"controls":        2,
+	"power":           2,
+}
+
 // isFilterName returns true if the identifier is a known CQL filter name.
 func isFilterName(name string) bool {
-	filters := map[string]bool{
-		"piece":           true,
-		"attack":          true,
-		"check":           true,
-		"mate":            true,
-		"stalemate":       true,
-		"wtm":             true,
-		"btm":             true,
-		"count":           true,
-		"material":        true,
-		"result":          true,
-		"player":          true,
-		"elo":             true,
-		"year":            true,
-		"pin":             true,
-		"ray":             true,
-		"between":         true,
-		"flip":            true,
-		"flipvertical":    true,
-		"flipcolor":       true,
-		"shift":           true,
-		"shifthorizontal": true,
-		"shiftvertical":   true,
-		"controls":        true,
-		"power":           true,
-		// Direction keywords for ray
-		"horizontal": true,
-		"vertical":   true,
-		"diagonal":   true,
-		"orthogonal": true,
-		// Color keywords for elo
-		"white": true,
-		"black": true,
-	}
-	return filters[name]
+	return filterNames[name]
 }
 
 // isZeroArgFilter returns true if the filter takes no arguments.
 func isZeroArgFilter(name string) bool {
-	zeroArg := map[string]bool{
-		"check":     true,
-		"mate":      true,
-		"stalemate": true,
-		"wtm":       true,
-		"btm":       true,
-		"year":      true,
-		// Direction keywords are zero-arg identifiers used as arguments
-		"horizontal": true,
-		"vertical":   true,
-		"diagonal":   true,
-		"orthogonal": true,
-		"white":      true,
-		"black":      true,
-	}
-	return zeroArg[name]
+	return zeroArgFilters[name]
 }
 
 // filterArgCount returns the expected number of arguments for a filter.
 // Returns -1 for variable argument filters.
 func filterArgCount(name string) int {
-	counts := map[string]int{
-		"piece":           2, // piece <designator> <square>
-		"attack":          2, // attack <piece> <square>
-		"count":           1, // count <designator>
-		"material":        1, // material <color>
-		"result":          1, // result <value>
-		"player":          1, // player <name>
-		"elo":             3, // elo <color> <op> <value>
-		"year":            2, // year <op> <value>
-		"pin":             3, // pin <piece> <through> <to>
-		"ray":             4, // ray <dir> <from> <through> <to>
-		"between":         2, // between <sq1> <sq2>
-		"flip":            1, // flip <expr>
-		"flipvertical":    1, // flipvertical <expr>
-		"flipcolor":       1, // flipcolor <expr>
-		"shift":           1, // shift <expr>
-		"shifthorizontal": 1, // shifthorizontal <expr>
-		"shiftvertical":   1, // shiftvertical <expr>
-		"controls":        2, // controls <piece> <square>
-		"power":           2, // power <piece> <op>
-	}
-	if c, ok := counts[name]; ok {
+	if c, ok := filterArgCounts[name]; ok {
 		return c
 	}
-	return -1 // Variable or unknown
+	return -1
 }

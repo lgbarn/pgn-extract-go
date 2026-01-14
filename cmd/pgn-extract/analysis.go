@@ -58,91 +58,92 @@ func matchesCQL(game *chess.Game, cqlNode cql.Node) bool {
 	return false
 }
 
-// fixGame attempts to fix common issues in a game
+// fixGame attempts to fix common issues in a game.
 func fixGame(game *chess.Game) bool {
+	fixed := fixMissingTags(game)
+	fixed = fixResultTag(game) || fixed
+	fixed = fixDateFormat(game) || fixed
+	fixed = cleanAllTags(game) || fixed
+	return fixed
+}
+
+// fixMissingTags adds placeholder values for missing required tags.
+func fixMissingTags(game *chess.Game) bool {
+	requiredTags := map[string]string{
+		"Event":  "?",
+		"Site":   "?",
+		"Date":   "????.??.??",
+		"Round":  "?",
+		"White":  "?",
+		"Black":  "?",
+		"Result": "*",
+	}
+
 	fixed := false
+	for tag, defaultValue := range requiredTags {
+		if game.GetTag(tag) == "" {
+			game.SetTag(tag, defaultValue)
+			fixed = true
+		}
+	}
+	return fixed
+}
 
-	// Fix missing required tags with placeholder values
-	if game.GetTag("Event") == "" {
-		game.SetTag("Event", "?")
-		fixed = true
-	}
-	if game.GetTag("Site") == "" {
-		game.SetTag("Site", "?")
-		fixed = true
-	}
-	if game.GetTag("Date") == "" {
-		game.SetTag("Date", "????.??.??")
-		fixed = true
-	}
-	if game.GetTag("Round") == "" {
-		game.SetTag("Round", "?")
-		fixed = true
-	}
-	if game.GetTag("White") == "" {
-		game.SetTag("White", "?")
-		fixed = true
-	}
-	if game.GetTag("Black") == "" {
-		game.SetTag("Black", "?")
-		fixed = true
-	}
-	if game.GetTag("Result") == "" {
-		game.SetTag("Result", "*")
-		fixed = true
-	}
-
-	// Fix invalid result tag
+// fixResultTag normalizes invalid result tags.
+func fixResultTag(game *chess.Game) bool {
 	resultTag := game.GetTag("Result")
 	validResults := map[string]bool{"1-0": true, "0-1": true, "1/2-1/2": true, "*": true}
-	if !validResults[resultTag] {
-		// Try to normalize common variations
-		switch strings.ToLower(strings.TrimSpace(resultTag)) {
-		case "1-0", "white", "white wins":
-			game.SetTag("Result", "1-0")
-			fixed = true
-		case "0-1", "black", "black wins":
-			game.SetTag("Result", "0-1")
-			fixed = true
-		case "1/2", "draw", "1/2-1/2", "0.5-0.5":
-			game.SetTag("Result", "1/2-1/2")
-			fixed = true
-		default:
-			game.SetTag("Result", "*")
-			fixed = true
-		}
+
+	if validResults[resultTag] {
+		return false
 	}
 
-	// Fix common date format issues
+	normalized := strings.ToLower(strings.TrimSpace(resultTag))
+	var newResult string
+
+	switch normalized {
+	case "1-0", "white", "white wins":
+		newResult = "1-0"
+	case "0-1", "black", "black wins":
+		newResult = "0-1"
+	case "1/2", "draw", "1/2-1/2", "0.5-0.5":
+		newResult = "1/2-1/2"
+	default:
+		newResult = "*"
+	}
+
+	game.SetTag("Result", newResult)
+	return true
+}
+
+// fixDateFormat normalizes date separators to dots.
+func fixDateFormat(game *chess.Game) bool {
 	date := game.GetTag("Date")
-	if date != "" && date != "????.??.??" {
-		// Replace common separators with dots
-		normalizedDate := strings.ReplaceAll(date, "/", ".")
-		normalizedDate = strings.ReplaceAll(normalizedDate, "-", ".")
-		if normalizedDate != date {
-			game.SetTag("Date", normalizedDate)
-			fixed = true
-		}
+	if date == "" || date == "????.??.??" {
+		return false
 	}
 
-	// Trim whitespace from all tags
-	for tag, value := range game.Tags {
-		trimmed := strings.TrimSpace(value)
-		if trimmed != value {
-			game.Tags[tag] = trimmed
-			fixed = true
-		}
+	normalizedDate := strings.ReplaceAll(date, "/", ".")
+	normalizedDate = strings.ReplaceAll(normalizedDate, "-", ".")
+
+	if normalizedDate == date {
+		return false
 	}
 
-	// Fix encoding issues - remove control characters
+	game.SetTag("Date", normalizedDate)
+	return true
+}
+
+// cleanAllTags trims whitespace and removes control characters from all tags.
+func cleanAllTags(game *chess.Game) bool {
+	fixed := false
 	for tag, value := range game.Tags {
-		cleaned := cleanString(value)
+		cleaned := cleanString(strings.TrimSpace(value))
 		if cleaned != value {
 			game.Tags[tag] = cleaned
 			fixed = true
 		}
 	}
-
 	return fixed
 }
 

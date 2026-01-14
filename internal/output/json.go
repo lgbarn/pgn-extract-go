@@ -51,64 +51,36 @@ func OutputGameJSON(game *chess.Game, cfg *config.Config) {
 
 // OutputGamesJSON outputs multiple games as a JSON array.
 func OutputGamesJSON(games []*chess.Game, cfg *config.Config, w io.Writer) {
-	output := &JSONOutput{
-		Games: make([]*JSONGame, 0, len(games)),
-	}
-
-	for _, game := range games {
-		jsonGame := GameToJSON(game, cfg)
-		output.Games = append(output.Games, jsonGame)
+	jsonGames := make([]*JSONGame, len(games))
+	for i, game := range games {
+		jsonGames[i] = GameToJSON(game, cfg)
 	}
 
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	enc.Encode(output)
+	enc.Encode(&JSONOutput{Games: jsonGames})
 }
 
 // GameToJSON converts a chess game to JSON format.
 func GameToJSON(game *chess.Game, cfg *config.Config) *JSONGame {
 	jg := &JSONGame{
-		Tags: make(map[string]string),
-	}
-
-	// Copy tags
-	for k, v := range game.Tags {
-		jg.Tags[k] = v
-	}
-
-	// Ensure seven tag roster has values
-	for _, tag := range chess.SevenTagRoster {
-		if _, ok := jg.Tags[tag]; !ok {
-			jg.Tags[tag] = "?"
-		}
+		Tags: copyTags(game.Tags),
 	}
 
 	// Get starting position
-	var board *chess.Board
-	if fen := game.GetTag("FEN"); fen != "" {
-		board, _ = engine.NewBoardFromFEN(fen)
-		jg.InitialFEN = fen
-	}
-	if board == nil {
-		board = engine.NewInitialBoard()
-	}
+	board, initialFEN := getInitialBoard(game)
+	jg.InitialFEN = initialFEN
 
-	// Convert moves
-	jg.Moves = convertMoves(game.Moves, board, cfg)
-
-	// Count plies
-	plyCount := 0
-	for move := game.Moves; move != nil; move = move.Next {
-		plyCount++
-	}
-	jg.PlyCount = plyCount
+	// Convert moves and count plies
+	jg.Moves = convertMoveList(game.Moves, board, cfg, true)
+	jg.PlyCount = countPlies(game.Moves)
 
 	// Get result
-	result := game.GetTag("Result")
-	if result == "" {
-		result = "*"
+	if result := game.GetTag("Result"); result != "" {
+		jg.Result = result
+	} else {
+		jg.Result = "*"
 	}
-	jg.Result = result
 
 	// Final FEN if requested
 	if cfg.Annotation.OutputFEN {
@@ -118,95 +90,52 @@ func GameToJSON(game *chess.Game, cfg *config.Config) *JSONGame {
 	return jg
 }
 
-// convertMoves converts a move list to JSON format.
-func convertMoves(moves *chess.Move, board *chess.Board, cfg *config.Config) []JSONMove {
+// copyTags copies game tags and ensures seven tag roster has values.
+func copyTags(tags map[string]string) map[string]string {
+	result := make(map[string]string, len(tags)+len(chess.SevenTagRoster))
+	for k, v := range tags {
+		result[k] = v
+	}
+	for _, tag := range chess.SevenTagRoster {
+		if _, ok := result[tag]; !ok {
+			result[tag] = "?"
+		}
+	}
+	return result
+}
+
+// getInitialBoard returns the starting board and initial FEN (if any).
+func getInitialBoard(game *chess.Game) (*chess.Board, string) {
+	if fen := game.GetTag("FEN"); fen != "" {
+		if board, _ := engine.NewBoardFromFEN(fen); board != nil {
+			return board, fen
+		}
+	}
+	return engine.NewInitialBoard(), ""
+}
+
+// countPlies counts the number of moves in a move list.
+func countPlies(moves *chess.Move) int {
+	count := 0
+	for move := moves; move != nil; move = move.Next {
+		count++
+	}
+	return count
+}
+
+// convertMoveList converts a move list to JSON format.
+// The includeFEN parameter controls whether FEN is added after each move.
+func convertMoveList(moves *chess.Move, board *chess.Board, cfg *config.Config, includeFEN bool) []JSONMove {
 	var result []JSONMove
 
 	moveNum := board.MoveNumber
 	isWhite := board.ToMove == chess.White
 
 	for move := moves; move != nil; move = move.Next {
-		jm := JSONMove{}
+		jm := convertSingleMove(move, board, cfg, moveNum, isWhite)
 
-		// Move number
-		if isWhite {
-			jm.MoveNumber = int(moveNum)
-		}
-
-		// Color
-		if isWhite {
-			jm.Color = "white"
-		} else {
-			jm.Color = "black"
-		}
-
-		// SAN
-		jm.SAN = move.Text
-
-		// Find source square
-		fromCol, fromRank := move.FromCol, move.FromRank
-		if fromCol == 0 || fromRank == 0 {
-			fromCol, fromRank = findSourceFromMove(move, board)
-		}
-
-		// From/To squares
-		if fromCol != 0 && fromRank != 0 {
-			jm.From = string([]byte{byte(fromCol), byte(fromRank)})
-		}
-		if move.ToCol != 0 && move.ToRank != 0 {
-			jm.To = string([]byte{byte(move.ToCol), byte(move.ToRank)})
-		}
-
-		// UCI format
-		jm.UCI = formatUCI(move, board)
-
-		// Piece type
-		jm.Piece = pieceTypeName(move.PieceToMove)
-
-		// Check for capture
-		captured := board.Get(move.ToCol, move.ToRank)
-		if captured != chess.Empty && captured != chess.Off {
-			jm.Captured = pieceTypeName(chess.ExtractPiece(captured))
-		} else if move.Class == chess.EnPassantPawnMove {
-			jm.Captured = "pawn"
-		}
-
-		// Promotion
-		if move.Class == chess.PawnMoveWithPromotion && move.PromotedPiece != chess.Empty {
-			jm.Promotion = pieceTypeName(move.PromotedPiece)
-		}
-
-		// NAGs
-		if cfg.Output.KeepNAGs && len(move.NAGs) > 0 {
-			for _, nag := range move.NAGs {
-				for _, text := range nag.Text {
-					jm.NAGs = append(jm.NAGs, text)
-				}
-			}
-		}
-
-		// Comments
-		if cfg.Output.KeepComments && len(move.Comments) > 0 {
-			for _, comment := range move.Comments {
-				jm.Comments = append(jm.Comments, comment.Text)
-			}
-		}
-
-		// Variations
-		if cfg.Output.KeepVariations && len(move.Variations) > 0 {
-			for _, v := range move.Variations {
-				varMoves := convertVariation(v, board.Copy(), cfg)
-				if len(varMoves) > 0 {
-					jm.Variations = append(jm.Variations, varMoves)
-				}
-			}
-		}
-
-		// Apply move to track position
-		engine.ApplyMove(board, move)
-
-		// Add FEN after move if requested
-		if cfg.Annotation.AddFENComments {
+		// Add FEN after move if requested (only for main line)
+		if includeFEN && cfg.Annotation.AddFENComments {
 			jm.FEN = engine.BoardToFEN(board)
 		}
 
@@ -221,86 +150,116 @@ func convertMoves(moves *chess.Move, board *chess.Board, cfg *config.Config) []J
 	return result
 }
 
-// convertVariation converts a variation to JSON format.
-func convertVariation(v *chess.Variation, board *chess.Board, cfg *config.Config) []JSONMove {
-	var result []JSONMove
-
-	moveNum := board.MoveNumber
-	isWhite := board.ToMove == chess.White
-
-	for move := v.Moves; move != nil; move = move.Next {
-		jm := JSONMove{}
-
-		if isWhite {
-			jm.MoveNumber = int(moveNum)
-		}
-
-		if isWhite {
-			jm.Color = "white"
-		} else {
-			jm.Color = "black"
-		}
-
-		jm.SAN = move.Text
-
-		fromCol, fromRank := move.FromCol, move.FromRank
-		if fromCol == 0 || fromRank == 0 {
-			fromCol, fromRank = findSourceFromMove(move, board)
-		}
-
-		if fromCol != 0 && fromRank != 0 {
-			jm.From = string([]byte{byte(fromCol), byte(fromRank)})
-		}
-		if move.ToCol != 0 && move.ToRank != 0 {
-			jm.To = string([]byte{byte(move.ToCol), byte(move.ToRank)})
-		}
-
-		jm.UCI = formatUCI(move, board)
-		jm.Piece = pieceTypeName(move.PieceToMove)
-
-		captured := board.Get(move.ToCol, move.ToRank)
-		if captured != chess.Empty && captured != chess.Off {
-			jm.Captured = pieceTypeName(chess.ExtractPiece(captured))
-		}
-
-		if move.Class == chess.PawnMoveWithPromotion && move.PromotedPiece != chess.Empty {
-			jm.Promotion = pieceTypeName(move.PromotedPiece)
-		}
-
-		if cfg.Output.KeepNAGs && len(move.NAGs) > 0 {
-			for _, nag := range move.NAGs {
-				for _, text := range nag.Text {
-					jm.NAGs = append(jm.NAGs, text)
-				}
-			}
-		}
-
-		if cfg.Output.KeepComments && len(move.Comments) > 0 {
-			for _, comment := range move.Comments {
-				jm.Comments = append(jm.Comments, comment.Text)
-			}
-		}
-
-		// Nested variations
-		if cfg.Output.KeepVariations && len(move.Variations) > 0 {
-			for _, nested := range move.Variations {
-				nestedMoves := convertVariation(nested, board.Copy(), cfg)
-				if len(nestedMoves) > 0 {
-					jm.Variations = append(jm.Variations, nestedMoves)
-				}
-			}
-		}
-
-		engine.ApplyMove(board, move)
-
-		result = append(result, jm)
-
-		if !isWhite {
-			moveNum++
-		}
-		isWhite = !isWhite
+// convertSingleMove converts a single move to JSON format and applies it to the board.
+func convertSingleMove(move *chess.Move, board *chess.Board, cfg *config.Config, moveNum uint, isWhite bool) JSONMove {
+	jm := JSONMove{
+		SAN:   move.Text,
+		Color: colorName(isWhite),
+		Piece: pieceTypeName(move.PieceToMove),
+		UCI:   formatUCI(move, board),
 	}
 
+	if isWhite {
+		jm.MoveNumber = int(moveNum)
+	}
+
+	// Source and destination squares
+	fromCol, fromRank := move.FromCol, move.FromRank
+	if fromCol == 0 || fromRank == 0 {
+		fromCol, fromRank = findSourceFromMove(move, board)
+	}
+	if fromCol != 0 && fromRank != 0 {
+		jm.From = string([]byte{byte(fromCol), byte(fromRank)})
+	}
+	if move.ToCol != 0 && move.ToRank != 0 {
+		jm.To = string([]byte{byte(move.ToCol), byte(move.ToRank)})
+	}
+
+	// Captured piece
+	jm.Captured = getCapturedPiece(move, board)
+
+	// Promotion
+	if move.Class == chess.PawnMoveWithPromotion && move.PromotedPiece != chess.Empty {
+		jm.Promotion = pieceTypeName(move.PromotedPiece)
+	}
+
+	// NAGs
+	if cfg.Output.KeepNAGs {
+		jm.NAGs = collectNAGs(move)
+	}
+
+	// Comments
+	if cfg.Output.KeepComments {
+		jm.Comments = collectComments(move)
+	}
+
+	// Variations
+	if cfg.Output.KeepVariations {
+		jm.Variations = convertVariationsJSON(move.Variations, board, cfg)
+	}
+
+	// Apply move to track position
+	engine.ApplyMove(board, move)
+
+	return jm
+}
+
+// colorName returns "white" or "black" based on the boolean.
+func colorName(isWhite bool) string {
+	if isWhite {
+		return "white"
+	}
+	return "black"
+}
+
+// getCapturedPiece returns the name of the captured piece, if any.
+func getCapturedPiece(move *chess.Move, board *chess.Board) string {
+	captured := board.Get(move.ToCol, move.ToRank)
+	if captured != chess.Empty && captured != chess.Off {
+		return pieceTypeName(chess.ExtractPiece(captured))
+	}
+	if move.Class == chess.EnPassantPawnMove {
+		return "pawn"
+	}
+	return ""
+}
+
+// collectNAGs collects all NAG strings from a move.
+func collectNAGs(move *chess.Move) []string {
+	if len(move.NAGs) == 0 {
+		return nil
+	}
+	var result []string
+	for _, nag := range move.NAGs {
+		result = append(result, nag.Text...)
+	}
+	return result
+}
+
+// collectComments collects all comment strings from a move.
+func collectComments(move *chess.Move) []string {
+	if len(move.Comments) == 0 {
+		return nil
+	}
+	result := make([]string, len(move.Comments))
+	for i, comment := range move.Comments {
+		result[i] = comment.Text
+	}
+	return result
+}
+
+// convertVariationsJSON converts all variations of a move to JSON format.
+func convertVariationsJSON(variations []*chess.Variation, board *chess.Board, cfg *config.Config) [][]JSONMove {
+	if len(variations) == 0 {
+		return nil
+	}
+	var result [][]JSONMove
+	for _, v := range variations {
+		varMoves := convertMoveList(v.Moves, board.Copy(), cfg, false)
+		if len(varMoves) > 0 {
+			result = append(result, varMoves)
+		}
+	}
 	return result
 }
 

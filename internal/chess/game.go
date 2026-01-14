@@ -57,27 +57,26 @@ func NewGame() *Game {
 
 // GetTag returns a tag value, or empty string if not present.
 func (g *Game) GetTag(name string) string {
-	if g.Tags == nil {
-		return ""
-	}
 	return g.Tags[name]
 }
 
 // SetTag sets a tag value.
 func (g *Game) SetTag(name, value string) {
-	if g.Tags == nil {
-		g.Tags = make(map[string]string)
-	}
+	g.ensureTags()
 	g.Tags[name] = value
 }
 
 // HasTag returns true if the tag is present.
 func (g *Game) HasTag(name string) bool {
-	if g.Tags == nil {
-		return false
-	}
 	_, ok := g.Tags[name]
 	return ok
+}
+
+// ensureTags initializes the Tags map if it is nil.
+func (g *Game) ensureTags() {
+	if g.Tags == nil {
+		g.Tags = make(map[string]string)
+	}
 }
 
 // White returns the White player name.

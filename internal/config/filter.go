@@ -41,18 +41,9 @@ type FilterConfig struct {
 }
 
 // NewFilterConfig creates a FilterConfig with default values.
+// All fields use Go zero values (false, 0) - filters are disabled by default.
 func NewFilterConfig() *FilterConfig {
-	return &FilterConfig{
-		// Most filter options disabled by default
-		CheckMoveBounds:       false,
-		MatchCheckmate:        false,
-		MatchStalemate:        false,
-		MatchUnderpromotion:   false,
-		CheckRepetition:       false,
-		CheckFiftyMoveRule:    false,
-		KeepBrokenGames:       false,
-		PositionalSearchDepth: 0,
-	}
+	return &FilterConfig{}
 }
 
 // Validate checks that the filter configuration is valid.

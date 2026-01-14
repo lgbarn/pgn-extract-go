@@ -1,5 +1,7 @@
 package cql
 
+import "strconv"
+
 // Node is the interface for all AST nodes.
 type Node interface {
 	node()
@@ -79,7 +81,7 @@ type NumberNode struct {
 
 func (n *NumberNode) node() {}
 func (n *NumberNode) String() string {
-	return string(rune('0' + n.Value)) // Simple for single digits
+	return strconv.Itoa(n.Value)
 }
 
 // StringNode represents a string literal.

@@ -76,66 +76,66 @@ func (ec *ECOClassifier) LoadFromReader(r io.Reader) error {
 
 // addECOEntry processes a game from the ECO file and adds it to the table.
 func (ec *ECOClassifier) addECOEntry(game *chess.Game) {
-	// Extract ECO tags
 	ecoCode := game.Tags["ECO"]
-	opening := game.Tags["Opening"]
-	variation := game.Tags["Variation"]
-	subVariation := game.Tags["SubVariation"]
-
 	if ecoCode == "" {
-		return // Skip entries without ECO code
+		return
 	}
 
-	// Replay the game to get position hashes
 	board, _ := engine.NewBoardFromFEN(engine.InitialFEN)
 	var cumulativeHash uint64
 	halfMoves := 0
 
 	for move := game.Moves; move != nil; move = move.Next {
 		if !engine.ApplyMove(board, move) {
-			// Move failed, stop here
 			break
 		}
 		halfMoves++
-		// Accumulate hash (simple XOR for cumulative)
-		posHash := hashing.GenerateZobristHash(board)
-		cumulativeHash ^= posHash
+		cumulativeHash ^= hashing.GenerateZobristHash(board)
 	}
 
 	if halfMoves == 0 {
-		return // No moves in this entry
+		return
 	}
 
-	// Create ECO entry
 	entry := &ECOEntry{
 		ECOCode:        ecoCode,
-		Opening:        opening,
-		Variation:      variation,
-		SubVariation:   subVariation,
+		Opening:        game.Tags["Opening"],
+		Variation:      game.Tags["Variation"],
+		SubVariation:   game.Tags["SubVariation"],
 		RequiredHash:   hashing.GenerateZobristHash(board),
 		CumulativeHash: cumulativeHash,
 		HalfMoves:      halfMoves,
 	}
 
-	// Check for collision
+	if ec.isDuplicate(entry) {
+		return
+	}
+
+	ec.insertEntry(entry)
+}
+
+// isDuplicate checks if an equivalent entry already exists in the table.
+func (ec *ECOClassifier) isDuplicate(entry *ECOEntry) bool {
 	ix := entry.RequiredHash % ECOTableSize
 	for existing := ec.table[ix]; existing != nil; existing = existing.Next {
 		if existing.RequiredHash == entry.RequiredHash &&
 			existing.HalfMoves == entry.HalfMoves &&
 			existing.CumulativeHash == entry.CumulativeHash {
-			// Collision - skip this entry
-			return
+			return true
 		}
 	}
+	return false
+}
 
-	// Add to table
+// insertEntry adds an entry to the hash table.
+func (ec *ECOClassifier) insertEntry(entry *ECOEntry) {
+	ix := entry.RequiredHash % ECOTableSize
 	entry.Next = ec.table[ix]
 	ec.table[ix] = entry
 	ec.entriesLoaded++
 
-	// Update max half moves
-	if halfMoves+ECOHalfMoveLimit > ec.maxHalfMoves {
-		ec.maxHalfMoves = halfMoves + ECOHalfMoveLimit
+	if entry.HalfMoves+ECOHalfMoveLimit > ec.maxHalfMoves {
+		ec.maxHalfMoves = entry.HalfMoves + ECOHalfMoveLimit
 	}
 }
 
@@ -146,30 +146,18 @@ func (ec *ECOClassifier) ClassifyGame(game *chess.Game) *ECOEntry {
 		return nil
 	}
 
-	// Check if game has custom start position
-	var board *chess.Board
-	var err error
-	if fen, ok := game.Tags["FEN"]; ok {
-		board, err = engine.NewBoardFromFEN(fen)
-		if err != nil {
-			board, _ = engine.NewBoardFromFEN(engine.InitialFEN)
-		}
-	} else {
-		board, _ = engine.NewBoardFromFEN(engine.InitialFEN)
-	}
+	board := ec.boardForGame(game)
 
 	var bestMatch *ECOEntry
 	var cumulativeHash uint64
 	halfMoves := 0
 
-	// Replay game and check each position
 	for move := game.Moves; move != nil; move = move.Next {
 		if !engine.ApplyMove(board, move) {
 			break
 		}
 		halfMoves++
 
-		// Don't bother checking if we're past max ECO depth
 		if halfMoves > ec.maxHalfMoves {
 			break
 		}
@@ -177,9 +165,7 @@ func (ec *ECOClassifier) ClassifyGame(game *chess.Game) *ECOEntry {
 		posHash := hashing.GenerateZobristHash(board)
 		cumulativeHash ^= posHash
 
-		// Look for match
-		match := ec.findMatch(posHash, cumulativeHash, halfMoves)
-		if match != nil {
+		if match := ec.findMatch(posHash, cumulativeHash, halfMoves); match != nil {
 			bestMatch = match
 		}
 	}
@@ -187,25 +173,39 @@ func (ec *ECOClassifier) ClassifyGame(game *chess.Game) *ECOEntry {
 	return bestMatch
 }
 
+// boardForGame returns a board initialized for the game's starting position.
+func (ec *ECOClassifier) boardForGame(game *chess.Game) *chess.Board {
+	if fen, ok := game.Tags["FEN"]; ok {
+		if board, err := engine.NewBoardFromFEN(fen); err == nil {
+			return board
+		}
+	}
+	board, _ := engine.NewBoardFromFEN(engine.InitialFEN)
+	return board
+}
+
 // findMatch looks up a position in the ECO table.
 func (ec *ECOClassifier) findMatch(posHash, cumulativeHash uint64, halfMoves int) *ECOEntry {
 	ix := posHash % ECOTableSize
-	var possible *ECOEntry
+	var partialMatch *ECOEntry
 
 	for entry := ec.table[ix]; entry != nil; entry = entry.Next {
-		if entry.RequiredHash == posHash {
-			// Exact match on position and cumulative hash
-			if entry.HalfMoves == halfMoves && entry.CumulativeHash == cumulativeHash {
-				return entry
-			}
-			// Partial match within limit
-			if abs(halfMoves-entry.HalfMoves) <= ECOHalfMoveLimit {
-				possible = entry
-			}
+		if entry.RequiredHash != posHash {
+			continue
+		}
+
+		// Exact match takes precedence
+		if entry.HalfMoves == halfMoves && entry.CumulativeHash == cumulativeHash {
+			return entry
+		}
+
+		// Track partial match within limit
+		if abs(halfMoves-entry.HalfMoves) <= ECOHalfMoveLimit {
+			partialMatch = entry
 		}
 	}
 
-	return possible
+	return partialMatch
 }
 
 // AddECOTags adds ECO, Opening, and Variation tags to a game.
@@ -215,20 +215,18 @@ func (ec *ECOClassifier) AddECOTags(game *chess.Game) bool {
 		return false
 	}
 
-	if match.ECOCode != "" {
-		game.Tags["ECO"] = match.ECOCode
-	}
-	if match.Opening != "" {
-		game.Tags["Opening"] = match.Opening
-	}
-	if match.Variation != "" {
-		game.Tags["Variation"] = match.Variation
-	}
-	if match.SubVariation != "" {
-		game.Tags["SubVariation"] = match.SubVariation
-	}
+	setTagIfNotEmpty(game, "ECO", match.ECOCode)
+	setTagIfNotEmpty(game, "Opening", match.Opening)
+	setTagIfNotEmpty(game, "Variation", match.Variation)
+	setTagIfNotEmpty(game, "SubVariation", match.SubVariation)
 
 	return true
+}
+
+func setTagIfNotEmpty(game *chess.Game, key, value string) {
+	if value != "" {
+		game.Tags[key] = value
+	}
 }
 
 // EntriesLoaded returns the number of ECO entries loaded.

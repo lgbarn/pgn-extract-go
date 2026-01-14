@@ -41,6 +41,9 @@ type Board struct {
 	HalfmoveClock uint
 }
 
+// boardDimension is the total size of the board array including hedge.
+const boardDimension = Hedge + BoardSize + Hedge
+
 // NewBoard creates a new empty board.
 func NewBoard() *Board {
 	b := &Board{
@@ -48,10 +51,9 @@ func NewBoard() *Board {
 		MoveNumber: 1,
 	}
 	// Initialize all squares to Off (hedge) or Empty
-	for col := 0; col < Hedge+BoardSize+Hedge; col++ {
-		for rank := 0; rank < Hedge+BoardSize+Hedge; rank++ {
-			if col >= Hedge && col < Hedge+BoardSize &&
-				rank >= Hedge && rank < Hedge+BoardSize {
+	for col := 0; col < boardDimension; col++ {
+		for rank := 0; rank < boardDimension; rank++ {
+			if isPlayableSquare(col, rank) {
 				b.Squares[col][rank] = Empty
 			} else {
 				b.Squares[col][rank] = Off
@@ -59,6 +61,12 @@ func NewBoard() *Board {
 		}
 	}
 	return b
+}
+
+// isPlayableSquare returns true if the given indices are within the playable board area.
+func isPlayableSquare(col, rank int) bool {
+	return col >= Hedge && col < Hedge+BoardSize &&
+		rank >= Hedge && rank < Hedge+BoardSize
 }
 
 // SetupInitialPosition sets up the standard chess starting position.
@@ -98,9 +106,9 @@ func (b *Board) SetupInitialPosition() {
 }
 
 // Get returns the piece at the given coordinates (using char coords 'a'-'h', '1'-'8').
+// Returns Off for invalid coordinates.
 func (b *Board) Get(col Col, rank Rank) Piece {
-	c := ColConvert(col)
-	r := RankConvert(rank)
+	c, r := ColConvert(col), RankConvert(rank)
 	if c == 0 || r == 0 {
 		return Off
 	}
@@ -108,12 +116,13 @@ func (b *Board) Get(col Col, rank Rank) Piece {
 }
 
 // Set places a piece at the given coordinates.
+// Invalid coordinates are silently ignored.
 func (b *Board) Set(col Col, rank Rank, piece Piece) {
-	c := ColConvert(col)
-	r := RankConvert(rank)
-	if c != 0 && r != 0 {
-		b.Squares[c][r] = piece
+	c, r := ColConvert(col), RankConvert(rank)
+	if c == 0 || r == 0 {
+		return
 	}
+	b.Squares[c][r] = piece
 }
 
 // GetByIndex returns the piece at the given board array indices.

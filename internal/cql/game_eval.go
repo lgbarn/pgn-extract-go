@@ -1,6 +1,7 @@
 package cql
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/lgbarn/pgn-extract-go/internal/engine"
@@ -64,13 +65,7 @@ func (e *Evaluator) evalYear() int {
 	}
 
 	// Parse year from "YYYY.MM.DD" or "YYYY" format
-	yearStr := date[:4]
-	year := 0
-	for _, c := range yearStr {
-		if c >= '0' && c <= '9' {
-			year = year*10 + int(c-'0')
-		}
-	}
+	year, _ := strconv.Atoi(date[:4])
 	return year
 }
 
@@ -106,12 +101,6 @@ func (e *Evaluator) evalElo(args []Node) int {
 		return 0
 	}
 
-	// Parse Elo rating
-	elo := 0
-	for _, c := range eloStr {
-		if c >= '0' && c <= '9' {
-			elo = elo*10 + int(c-'0')
-		}
-	}
+	elo, _ := strconv.Atoi(eloStr)
 	return elo
 }

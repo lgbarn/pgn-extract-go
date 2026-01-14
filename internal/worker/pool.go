@@ -42,13 +42,8 @@ type ProcessResult struct {
 
 // GetGameInfo returns the GameInfo if it implements the interface, or nil.
 func (r *ProcessResult) GetGameInfo() GameInfo {
-	if r.GameInfo == nil {
-		return nil
-	}
-	if gi, ok := r.GameInfo.(GameInfo); ok {
-		return gi
-	}
-	return nil
+	gi, _ := r.GameInfo.(GameInfo)
+	return gi
 }
 
 // ProcessFunc is the function signature for processing a work item.
@@ -86,11 +81,8 @@ func WithBufferSize(size int) PoolOption {
 	}
 }
 
-// NewPool creates a new worker pool.
-// numWorkers: number of worker goroutines
-// bufferSize: channel buffer size (recommended: min(numGames, 100))
-// processFunc: the function to process each work item
-func NewPool(numWorkers int, bufferSize int, processFunc ProcessFunc) *Pool {
+// NewPool creates a new worker pool with the specified number of workers and buffer size.
+func NewPool(numWorkers, bufferSize int, processFunc ProcessFunc) *Pool {
 	if numWorkers < 1 {
 		numWorkers = 1
 	}
@@ -132,19 +124,15 @@ func (p *Pool) Start() {
 	}
 }
 
-// worker is the main worker goroutine loop.
+// worker processes items from the work channel until it is closed.
 func (p *Pool) worker() {
 	defer p.wg.Done()
 
 	for item := range p.workChan {
-		// Check if we should stop early
-		if atomic.LoadInt32(&p.stopFlag) != 0 {
-			// Still drain the channel but don't process
-			continue
+		if p.IsStopped() {
+			continue // Drain channel without processing
 		}
-
-		result := p.processFunc(item)
-		p.resultChan <- result
+		p.resultChan <- p.processFunc(item)
 	}
 }
 

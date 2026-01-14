@@ -94,17 +94,8 @@ func (pm *PositionMatcher) MatchGame(game *chess.Game) *FENPattern {
 		return nil
 	}
 
-	// Get starting position
-	var board *chess.Board
-	var err error
-	if fen, ok := game.Tags["FEN"]; ok {
-		board, err = engine.NewBoardFromFEN(fen)
-		if err != nil {
-			board, _ = engine.NewBoardFromFEN(engine.InitialFEN)
-		}
-	} else {
-		board, _ = engine.NewBoardFromFEN(engine.InitialFEN)
-	}
+	// Get starting position from FEN tag or use initial position
+	board := pm.getStartingBoard(game)
 
 	// Check initial position
 	if match := pm.matchPosition(board); match != nil {
@@ -123,6 +114,17 @@ func (pm *PositionMatcher) MatchGame(game *chess.Game) *FENPattern {
 	}
 
 	return nil
+}
+
+// getStartingBoard returns the starting board from FEN tag or initial position.
+func (pm *PositionMatcher) getStartingBoard(game *chess.Game) *chess.Board {
+	if fen, ok := game.Tags["FEN"]; ok {
+		if board, err := engine.NewBoardFromFEN(fen); err == nil {
+			return board
+		}
+	}
+	board, _ := engine.NewBoardFromFEN(engine.InitialFEN)
+	return board
 }
 
 // matchPosition checks if a position matches any pattern.
@@ -253,39 +255,35 @@ func matchRank(boardRank, patternRank string) bool {
 
 		case '!':
 			// ! matches any non-empty square
-			if bi < len(boardRank) && boardRank[bi] != '_' {
-				bi++
-				pi++
-			} else {
+			if bi >= len(boardRank) || boardRank[bi] == '_' {
 				return false
 			}
+			bi++
+			pi++
 
 		case 'A':
-			// A matches any white piece
-			if bi < len(boardRank) && boardRank[bi] >= 'A' && boardRank[bi] <= 'Z' && boardRank[bi] != '_' {
-				bi++
-				pi++
-			} else {
+			// A matches any white piece (uppercase letters except _)
+			if bi >= len(boardRank) || boardRank[bi] < 'A' || boardRank[bi] > 'Z' {
 				return false
 			}
+			bi++
+			pi++
 
 		case 'a':
 			// a (lowercase) matches any black piece
-			if bi < len(boardRank) && boardRank[bi] >= 'a' && boardRank[bi] <= 'z' {
-				bi++
-				pi++
-			} else {
+			if bi >= len(boardRank) || boardRank[bi] < 'a' || boardRank[bi] > 'z' {
 				return false
 			}
+			bi++
+			pi++
 
 		case '_':
 			// _ matches empty square
-			if bi < len(boardRank) && boardRank[bi] == '_' {
-				bi++
-				pi++
-			} else {
+			if bi >= len(boardRank) || boardRank[bi] != '_' {
 				return false
 			}
+			bi++
+			pi++
 
 		case '1', '2', '3', '4', '5', '6', '7', '8':
 			// Number means N empty squares
@@ -300,12 +298,11 @@ func matchRank(boardRank, patternRank string) bool {
 
 		default:
 			// Exact piece match
-			if bi < len(boardRank) && boardRank[bi] == c {
-				bi++
-				pi++
-			} else {
+			if bi >= len(boardRank) || boardRank[bi] != c {
 				return false
 			}
+			bi++
+			pi++
 		}
 	}
 

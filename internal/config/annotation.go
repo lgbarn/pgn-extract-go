@@ -28,17 +28,7 @@ type AnnotationConfig struct {
 }
 
 // NewAnnotationConfig creates an AnnotationConfig with default values.
+// All boolean fields default to false (Go zero value).
 func NewAnnotationConfig() *AnnotationConfig {
-	return &AnnotationConfig{
-		OutputFEN:        false,
-		AddFENComments:   false,
-		AddHashComments:  false,
-		AddPlyCount:      false,
-		AddTotalPlyCount: false,
-		AddHashTag:       false,
-		AddMatchTag:      false,
-		AddMatchLabelTag: false,
-		FixResultTags:    false,
-		FixTagStrings:    false,
-	}
+	return &AnnotationConfig{}
 }

@@ -91,28 +91,21 @@ func OutputGame(game *chess.Game, cfg *config.Config) {
 
 // outputTags outputs the game tags.
 func outputTags(game *chess.Game, cfg *config.Config, w io.Writer) {
-	switch cfg.Output.TagFormat {
-	case config.NoTags:
+	if cfg.Output.TagFormat == config.NoTags {
 		return
-	case config.SevenTagRoster:
-		// Output only the seven tag roster
-		for _, tag := range chess.SevenTagRoster {
-			value := game.GetTag(tag)
-			if value == "" {
-				value = "?"
-			}
-			fmt.Fprintf(w, "[%s \"%s\"]\n", tag, escapeTagValue(value))
+	}
+
+	// Output seven tag roster first (common to both SevenTagRoster and AllTags)
+	for _, tag := range chess.SevenTagRoster {
+		value := game.GetTag(tag)
+		if value == "" {
+			value = "?"
 		}
-	default:
-		// Output seven tag roster first
-		for _, tag := range chess.SevenTagRoster {
-			value := game.GetTag(tag)
-			if value == "" {
-				value = "?"
-			}
-			fmt.Fprintf(w, "[%s \"%s\"]\n", tag, escapeTagValue(value))
-		}
-		// Then other tags
+		fmt.Fprintf(w, "[%s \"%s\"]\n", tag, escapeTagValue(value))
+	}
+
+	// Output additional tags if not restricted to seven tag roster
+	if cfg.Output.TagFormat != config.SevenTagRoster {
 		for tag, value := range game.Tags {
 			if !chess.IsSevenTagRosterTag(tag) {
 				fmt.Fprintf(w, "[%s \"%s\"]\n", tag, escapeTagValue(value))
@@ -165,33 +158,19 @@ func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
 
 		// Output NAGs
 		if cfg.Output.KeepNAGs && len(move.NAGs) > 0 {
-			for _, nag := range move.NAGs {
-				for _, text := range nag.Text {
-					ow.Write(text)
-				}
-			}
+			outputNAGs(move, ow)
 		}
 
 		// Output comments
-		if cfg.Output.KeepComments && len(move.Comments) > 0 {
+		if cfg.Output.KeepComments {
 			for _, comment := range move.Comments {
-				text := comment.Text
-				if cfg.Output.StripClockAnnotations {
-					text = stripClockAnnotations(text)
-				}
-				if text != "" {
-					ow.Write("{" + text + "}")
-				}
+				outputComment(comment, cfg, ow, false)
 			}
 		}
 
 		// Output variations
-		if cfg.Output.KeepVariations && len(move.Variations) > 0 {
-			for _, variation := range move.Variations {
-				savedState := board.SaveState()
-				outputVariation(variation, board, cfg, ow)
-				board.RestoreState(savedState)
-			}
+		if cfg.Output.KeepVariations {
+			outputVariations(move.Variations, board, cfg, ow)
 		}
 
 		// Apply the move to track position
@@ -205,23 +184,59 @@ func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
 
 	// Output result
 	if cfg.Output.KeepResults {
-		result := ""
-		if game.Moves != nil {
-			lastMove := game.LastMove()
-			if lastMove != nil && lastMove.TerminatingResult != "" {
-				result = lastMove.TerminatingResult
-			}
-		}
-		if result == "" {
-			result = game.GetTag("Result")
-		}
-		if result == "" {
-			result = "*"
-		}
+		result := getGameResult(game)
 		ow.Write(result)
 	}
 
 	ow.NewLine()
+}
+
+// getGameResult returns the result of a game, checking terminating result first.
+func getGameResult(game *chess.Game) string {
+	if game.Moves != nil {
+		if lastMove := game.LastMove(); lastMove != nil && lastMove.TerminatingResult != "" {
+			return lastMove.TerminatingResult
+		}
+	}
+	if result := game.GetTag("Result"); result != "" {
+		return result
+	}
+	return "*"
+}
+
+// outputComment writes a comment, optionally stripping clock annotations.
+func outputComment(comment *chess.Comment, cfg *config.Config, ow *OutputWriter, useNoSpace bool) {
+	text := comment.Text
+	if cfg.Output.StripClockAnnotations {
+		text = stripClockAnnotations(text)
+	}
+	if text == "" {
+		return
+	}
+	formatted := "{" + text + "}"
+	if useNoSpace {
+		ow.WriteNoSpace(formatted)
+	} else {
+		ow.Write(formatted)
+	}
+}
+
+// outputNAGs writes NAGs for a move.
+func outputNAGs(move *chess.Move, ow *OutputWriter) {
+	for _, nag := range move.NAGs {
+		for _, text := range nag.Text {
+			ow.Write(text)
+		}
+	}
+}
+
+// outputVariations outputs all variations for a move.
+func outputVariations(variations []*chess.Variation, board *chess.Board, cfg *config.Config, ow *OutputWriter) {
+	for _, variation := range variations {
+		savedState := board.SaveState()
+		outputVariation(variation, board, cfg, ow)
+		board.RestoreState(savedState)
+	}
 }
 
 // outputVariation outputs a variation.
@@ -231,13 +246,7 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 	// Prefix comments
 	if cfg.Output.KeepComments {
 		for _, comment := range variation.PrefixComment {
-			text := comment.Text
-			if cfg.Output.StripClockAnnotations {
-				text = stripClockAnnotations(text)
-			}
-			if text != "" {
-				ow.WriteNoSpace("{" + text + "}")
-			}
+			outputComment(comment, cfg, ow, true)
 		}
 	}
 
@@ -248,50 +257,33 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 
 	for move := variation.Moves; move != nil; move = move.Next {
 		// Output move number
-		if cfg.Output.KeepMoveNumbers {
-			if isWhite || first {
-				if isWhite {
-					ow.Write(fmt.Sprintf("%d.", moveNum))
-				} else {
-					ow.Write(fmt.Sprintf("%d...", moveNum))
-				}
+		if cfg.Output.KeepMoveNumbers && (isWhite || first) {
+			if isWhite {
+				ow.Write(fmt.Sprintf("%d.", moveNum))
+			} else {
+				ow.Write(fmt.Sprintf("%d...", moveNum))
 			}
 		}
 		first = false
 
 		// Output the move
-		moveText := formatMove(move, board, cfg.Output.Format)
-		ow.Write(moveText)
+		ow.Write(formatMove(move, board, cfg.Output.Format))
 
 		// Output NAGs
 		if cfg.Output.KeepNAGs && len(move.NAGs) > 0 {
-			for _, nag := range move.NAGs {
-				for _, text := range nag.Text {
-					ow.Write(text)
-				}
-			}
+			outputNAGs(move, ow)
 		}
 
 		// Output comments
-		if cfg.Output.KeepComments && len(move.Comments) > 0 {
+		if cfg.Output.KeepComments {
 			for _, comment := range move.Comments {
-				text := comment.Text
-				if cfg.Output.StripClockAnnotations {
-					text = stripClockAnnotations(text)
-				}
-				if text != "" {
-					ow.Write("{" + text + "}")
-				}
+				outputComment(comment, cfg, ow, false)
 			}
 		}
 
 		// Nested variations
-		if cfg.Output.KeepVariations && len(move.Variations) > 0 {
-			for _, v := range move.Variations {
-				savedState := board.SaveState()
-				outputVariation(v, board, cfg, ow)
-				board.RestoreState(savedState)
-			}
+		if cfg.Output.KeepVariations {
+			outputVariations(move.Variations, board, cfg, ow)
 		}
 
 		// Apply the move
@@ -304,13 +296,9 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 	}
 
 	// Result in variation
-	if variation.Moves != nil {
-		lastMove := variation.Moves
-		for lastMove.Next != nil {
-			lastMove = lastMove.Next
-		}
-		if lastMove.TerminatingResult != "" && cfg.Output.KeepResults {
-			ow.Write(lastMove.TerminatingResult)
+	if cfg.Output.KeepResults {
+		if result := getVariationResult(variation); result != "" {
+			ow.Write(result)
 		}
 	}
 
@@ -319,15 +307,21 @@ func outputVariation(variation *chess.Variation, board *chess.Board, cfg *config
 	// Suffix comments
 	if cfg.Output.KeepComments {
 		for _, comment := range variation.SuffixComment {
-			text := comment.Text
-			if cfg.Output.StripClockAnnotations {
-				text = stripClockAnnotations(text)
-			}
-			if text != "" {
-				ow.Write("{" + text + "}")
-			}
+			outputComment(comment, cfg, ow, false)
 		}
 	}
+}
+
+// getVariationResult returns the terminating result of a variation, if any.
+func getVariationResult(variation *chess.Variation) string {
+	if variation.Moves == nil {
+		return ""
+	}
+	lastMove := variation.Moves
+	for lastMove.Next != nil {
+		lastMove = lastMove.Next
+	}
+	return lastMove.TerminatingResult
 }
 
 // formatMove formats a move in the specified notation.
@@ -349,13 +343,12 @@ func formatMove(move *chess.Move, board *chess.Board, format config.OutputFormat
 
 // formatLongAlgebraic formats a move in long algebraic notation.
 func formatLongAlgebraic(move *chess.Move, board *chess.Board, hyphenated bool, enhanced bool) string {
-	if move.Class == chess.KingsideCastle {
+	switch move.Class {
+	case chess.KingsideCastle:
 		return "O-O"
-	}
-	if move.Class == chess.QueensideCastle {
+	case chess.QueensideCastle:
 		return "O-O-O"
-	}
-	if move.Class == chess.NullMove {
+	case chess.NullMove:
 		return "--"
 	}
 
@@ -367,11 +360,8 @@ func formatLongAlgebraic(move *chess.Move, board *chess.Board, hyphenated bool, 
 	}
 
 	// Source square
-	fromCol := move.FromCol
-	fromRank := move.FromRank
+	fromCol, fromRank := move.FromCol, move.FromRank
 	if fromCol == 0 || fromRank == 0 {
-		// Need to find the source square
-		// For now, use the move text parsing
 		fromCol, fromRank = findSourceFromMove(move, board)
 	}
 
@@ -380,10 +370,10 @@ func formatLongAlgebraic(move *chess.Move, board *chess.Board, hyphenated bool, 
 		sb.WriteByte(byte(fromRank))
 	}
 
-	// Separator
+	// Separator for hyphenated notation
 	if hyphenated {
-		// Check if capture
-		if board.Get(move.ToCol, move.ToRank) != chess.Empty || move.Class == chess.EnPassantPawnMove {
+		isCapture := board.Get(move.ToCol, move.ToRank) != chess.Empty || move.Class == chess.EnPassantPawnMove
+		if isCapture {
 			sb.WriteByte('x')
 		} else {
 			sb.WriteByte('-')
@@ -405,19 +395,18 @@ func formatLongAlgebraic(move *chess.Move, board *chess.Board, hyphenated bool, 
 
 // formatUCI formats a move in UCI notation.
 func formatUCI(move *chess.Move, board *chess.Board) string {
-	if move.Class == chess.KingsideCastle {
+	switch move.Class {
+	case chess.KingsideCastle:
 		if board.ToMove == chess.White {
 			return "e1g1"
 		}
 		return "e8g8"
-	}
-	if move.Class == chess.QueensideCastle {
+	case chess.QueensideCastle:
 		if board.ToMove == chess.White {
 			return "e1c1"
 		}
 		return "e8c8"
-	}
-	if move.Class == chess.NullMove {
+	case chess.NullMove:
 		return "0000"
 	}
 
@@ -436,7 +425,7 @@ func formatUCI(move *chess.Move, board *chess.Board) string {
 
 	// Promotion (lowercase in UCI)
 	if move.Class == chess.PawnMoveWithPromotion && move.PromotedPiece != chess.Empty {
-		sb.WriteByte(byte(strings.ToLower(string(engine.SANPieceLetter(move.PromotedPiece)))[0]))
+		sb.WriteByte(engine.SANPieceLetter(move.PromotedPiece) + 'a' - 'A')
 	}
 
 	return sb.String()

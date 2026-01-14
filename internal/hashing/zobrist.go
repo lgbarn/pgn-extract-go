@@ -132,25 +132,38 @@ const SideToMoveKey uint64 = 0xF8D626AAAF278509
 func GenerateZobristHash(board *chess.Board) uint64 {
 	var hash uint64
 
-	// Hash pieces on the board
+	hash = hashPieces(board, hash)
+	hash = hashSideToMove(board, hash)
+	hash = hashCastlingRights(board, hash)
+	hash = hashEnPassant(board, hash)
+
+	return hash
+}
+
+func hashPieces(board *chess.Board, hash uint64) uint64 {
 	for rank := chess.Rank('1'); rank <= '8'; rank++ {
 		for col := chess.Col('a'); col <= 'h'; col++ {
 			piece := board.Get(col, rank)
-			if piece != chess.Empty && piece != chess.Off {
-				if id, ok := pieceToID[piece]; ok {
-					squareIndex := 8*(int(rank)-int('1')) + (int(col) - int('a'))
-					hash ^= Random64[pieceOffset+64*id+squareIndex]
-				}
+			if piece == chess.Empty || piece == chess.Off {
+				continue
+			}
+			if id, ok := pieceToID[piece]; ok {
+				squareIndex := 8*(int(rank)-int('1')) + (int(col) - int('a'))
+				hash ^= Random64[pieceOffset+64*id+squareIndex]
 			}
 		}
 	}
+	return hash
+}
 
-	// Hash side to move
+func hashSideToMove(board *chess.Board, hash uint64) uint64 {
 	if board.ToMove == chess.White {
 		hash ^= SideToMoveKey
 	}
+	return hash
+}
 
-	// Hash castling rights
+func hashCastlingRights(board *chess.Board, hash uint64) uint64 {
 	if board.WKingCastle != 0 {
 		hash ^= Random64[castlingOffset]
 	}
@@ -163,22 +176,23 @@ func GenerateZobristHash(board *chess.Board) uint64 {
 	if board.BQueenCastle != 0 {
 		hash ^= Random64[castlingOffset+3]
 	}
+	return hash
+}
 
-	// Hash en passant (only if usable)
+func hashEnPassant(board *chess.Board, hash uint64) uint64 {
 	if board.EnPassant && isEPUsable(board) {
 		epCol := int(board.EPCol) - int('a')
 		hash ^= Random64[enPassantOffset+epCol]
 	}
-
 	return hash
 }
 
 // isEPUsable checks if the en passant square can actually be used.
 func isEPUsable(board *chess.Board) bool {
 	epCol := board.EPCol
+
 	var fromRank chess.Rank
 	var pawn chess.Piece
-
 	if board.ToMove == chess.White {
 		fromRank = '5'
 		pawn = chess.W(chess.Pawn)
@@ -187,16 +201,10 @@ func isEPUsable(board *chess.Board) bool {
 		pawn = chess.B(chess.Pawn)
 	}
 
-	// Check left
-	if epCol > 'a' && board.Get(epCol-1, fromRank) == pawn {
-		return true
-	}
-	// Check right
-	if epCol < 'h' && board.Get(epCol+1, fromRank) == pawn {
-		return true
-	}
+	leftHasPawn := epCol > 'a' && board.Get(epCol-1, fromRank) == pawn
+	rightHasPawn := epCol < 'h' && board.Get(epCol+1, fromRank) == pawn
 
-	return false
+	return leftHasPawn || rightHasPawn
 }
 
 // WeakHash generates a simple hash for faster duplicate detection.
@@ -204,19 +212,18 @@ func isEPUsable(board *chess.Board) bool {
 func WeakHash(board *chess.Board) chess.HashCode {
 	var hash chess.HashCode
 
-	// Simple piece-position hash
 	for rank := chess.Rank('1'); rank <= '8'; rank++ {
 		for col := chess.Col('a'); col <= 'h'; col++ {
 			piece := board.Get(col, rank)
-			if piece != chess.Empty && piece != chess.Off {
-				squareIndex := 8*(int(rank)-int('1')) + (int(col) - int('a'))
-				hash ^= chess.HashCode(uint64(piece) << uint(squareIndex%32))
-				hash ^= chess.HashCode(squareIndex * int(piece))
+			if piece == chess.Empty || piece == chess.Off {
+				continue
 			}
+			squareIndex := 8*(int(rank)-int('1')) + (int(col) - int('a'))
+			hash ^= chess.HashCode(uint64(piece) << uint(squareIndex%32))
+			hash ^= chess.HashCode(squareIndex * int(piece))
 		}
 	}
 
-	// Include side to move
 	if board.ToMove == chess.Black {
 		hash ^= 0x1
 	}

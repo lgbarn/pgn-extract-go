@@ -65,285 +65,335 @@ func isCheck(c byte) bool {
 	return c == '+' || c == '#'
 }
 
+// moveDecoder holds state for parsing a move string.
+type moveDecoder struct {
+	input         string
+	pos           int
+	fromRank      chess.Rank
+	toRank        chess.Rank
+	fromCol       chess.Col
+	toCol         chess.Col
+	class         chess.MoveClass
+	pieceToMove   chess.Piece
+	promotedPiece chess.Piece
+	ok            bool
+}
+
+func newMoveDecoder(input string) *moveDecoder {
+	return &moveDecoder{input: input, ok: true}
+}
+
+func (d *moveDecoder) currentChar() byte {
+	if d.pos >= len(d.input) {
+		return 0
+	}
+	return d.input[d.pos]
+}
+
+func (d *moveDecoder) advance() {
+	if d.pos < len(d.input) {
+		d.pos++
+	}
+}
+
+func (d *moveDecoder) remaining() string {
+	if d.pos >= len(d.input) {
+		return ""
+	}
+	return d.input[d.pos:]
+}
+
+func (d *moveDecoder) skipCapture() {
+	if isCapture(d.currentChar()) {
+		d.advance()
+	}
+}
+
 // DecodeMove parses a move string and returns a Move structure with decoded information.
 func DecodeMove(moveString string) *chess.Move {
+	d := newMoveDecoder(moveString)
+	d.decode()
+
 	move := chess.NewMove()
 	move.Text = moveString
-
-	var fromRank, toRank chess.Rank
-	var fromCol, toCol chess.Col
-	var class chess.MoveClass
-	ok := true
-
-	// Temporary locations
-	var col chess.Col
-	var rank chess.Rank
-
-	pos := 0
-	pieceToMove := chess.Empty
-	promotedPiece := chess.Empty
-
-	// Get current character helper
-	currentChar := func() byte {
-		if pos >= len(moveString) {
-			return 0
-		}
-		return moveString[pos]
-	}
-
-	advance := func() {
-		if pos < len(moveString) {
-			pos++
-		}
-	}
-
-	remaining := func() string {
-		if pos >= len(moveString) {
-			return ""
-		}
-		return moveString[pos:]
-	}
-
-	// Make an initial distinction between pawn moves and piece moves
-	if isCol(currentChar()) {
-		// Pawn move
-		class = chess.PawnMove
-		pieceToMove = chess.Pawn
-		col = chess.Col(currentChar())
-		advance()
-
-		if isRank(currentChar()) {
-			// e4, e2e4
-			rank = chess.Rank(currentChar())
-			advance()
-
-			if isCapture(currentChar()) {
-				advance()
-			}
-
-			if isCol(currentChar()) {
-				fromCol = col
-				fromRank = rank
-				toCol = chess.Col(currentChar())
-				advance()
-
-				if isRank(currentChar()) {
-					toRank = chess.Rank(currentChar())
-					advance()
-				}
-			} else {
-				toCol = col
-				toRank = rank
-			}
-		} else {
-			if isCapture(currentChar()) {
-				// axb
-				advance()
-			}
-
-			if isCol(currentChar()) {
-				// ab, or bg8
-				fromCol = col
-				toCol = chess.Col(currentChar())
-				advance()
-
-				if isRank(currentChar()) {
-					toRank = chess.Rank(currentChar())
-					advance()
-
-					// Sanity check
-					if fromCol != 'b' && fromCol != chess.Col(byte(toCol)+1) && fromCol != chess.Col(byte(toCol)-1) {
-						ok = false
-					}
-				} else {
-					// Sanity check
-					if fromCol != chess.Col(byte(toCol)+1) && fromCol != chess.Col(byte(toCol)-1) {
-						ok = false
-					}
-				}
-			} else {
-				ok = false
-			}
-		}
-
-		if ok {
-			// Look for promotions
-			if currentChar() == '=' {
-				advance()
-			}
-			// Allow trailing 'b' as Bishop promotion
-			if piece := isPiece(remaining()); piece != chess.Empty {
-				class = chess.PawnMoveWithPromotion
-				promotedPiece = piece
-				advance()
-			} else if currentChar() == 'b' {
-				class = chess.PawnMoveWithPromotion
-				promotedPiece = chess.Bishop
-				advance()
-			}
-		}
-	} else if pieceToMove = isPiece(remaining()); pieceToMove != chess.Empty {
-		class = chess.PieceMove
-
-		// Check for two-character Russian King
-		if currentChar() == RussianKnightOrKing && pieceToMove == chess.King {
-			advance()
-		}
-		advance()
-
-		if isRank(currentChar()) {
-			// Disambiguating rank: R1e1, R1xe3
-			fromRank = chess.Rank(currentChar())
-			advance()
-
-			if isCapture(currentChar()) {
-				advance()
-			}
-
-			if isCol(currentChar()) {
-				toCol = chess.Col(currentChar())
-				advance()
-
-				if isRank(currentChar()) {
-					toRank = chess.Rank(currentChar())
-					advance()
-				}
-			} else {
-				ok = false
-			}
-		} else {
-			if isCapture(currentChar()) {
-				// Rxe1
-				advance()
-
-				if isCol(currentChar()) {
-					toCol = chess.Col(currentChar())
-					advance()
-
-					if isRank(currentChar()) {
-						toRank = chess.Rank(currentChar())
-						advance()
-					} else {
-						ok = false
-					}
-				} else {
-					ok = false
-				}
-			} else if isCol(currentChar()) {
-				col = chess.Col(currentChar())
-				advance()
-
-				if isCapture(currentChar()) {
-					advance()
-				}
-
-				if isRank(currentChar()) {
-					// Re1, Re1d1, Re1xd1
-					rank = chess.Rank(currentChar())
-					advance()
-
-					if isCapture(currentChar()) {
-						advance()
-					}
-
-					if isCol(currentChar()) {
-						// Re1d1
-						fromCol = col
-						fromRank = rank
-						toCol = chess.Col(currentChar())
-						advance()
-
-						if isRank(currentChar()) {
-							toRank = chess.Rank(currentChar())
-							advance()
-						} else {
-							ok = false
-						}
-					} else {
-						toCol = col
-						toRank = rank
-					}
-				} else if isCol(currentChar()) {
-					// Rae1
-					fromCol = col
-					toCol = chess.Col(currentChar())
-					advance()
-
-					if isRank(currentChar()) {
-						toRank = chess.Rank(currentChar())
-						advance()
-					} else {
-						ok = false
-					}
-				} else {
-					ok = false
-				}
-			} else {
-				ok = false
-			}
-		}
-	} else if isCastlingChar(currentChar()) {
-		// Castling
-		advance()
-
-		// Allow optional separator
-		if currentChar() == '-' {
-			advance()
-		}
-
-		if isCastlingChar(currentChar()) {
-			advance()
-
-			if currentChar() == '-' {
-				advance()
-			}
-
-			if isCastlingChar(currentChar()) {
-				class = chess.QueensideCastle
-				advance()
-			} else {
-				class = chess.KingsideCastle
-			}
-			pieceToMove = chess.King
-		} else {
-			ok = false
-		}
-	} else if moveString == chess.NullMoveString {
-		class = chess.NullMove
-	} else {
-		ok = false
-	}
-
-	if ok && class != chess.NullMove {
-		// Allow trailing checks
-		for isCheck(currentChar()) {
-			advance()
-		}
-
-		if currentChar() == 0 {
-			// Nothing more to check
-		} else if (strings.HasSuffix(remaining(), "ep") || strings.HasSuffix(remaining(), "e.p.")) &&
-			class == chess.PawnMove {
-			class = chess.EnPassantPawnMove
-		} else {
-			ok = false
-		}
-	}
-
-	// Store all details
-	if !ok {
-		class = chess.UnknownMove
-	}
-
-	move.Class = class
-	move.PieceToMove = pieceToMove
-	move.PromotedPiece = promotedPiece
-	move.FromCol = fromCol
-	move.FromRank = fromRank
-	move.ToCol = toCol
-	move.ToRank = toRank
+	move.Class = d.class
+	move.PieceToMove = d.pieceToMove
+	move.PromotedPiece = d.promotedPiece
+	move.FromCol = d.fromCol
+	move.FromRank = d.fromRank
+	move.ToCol = d.toCol
+	move.ToRank = d.toRank
 
 	return move
+}
+
+func (d *moveDecoder) decode() {
+	switch {
+	case isCol(d.currentChar()):
+		d.decodePawnMove()
+	case isPiece(d.remaining()) != chess.Empty:
+		d.decodePieceMove()
+	case isCastlingChar(d.currentChar()):
+		d.decodeCastling()
+	case d.input == chess.NullMoveString:
+		d.class = chess.NullMove
+	default:
+		d.ok = false
+	}
+
+	d.validateTrailing()
+
+	if !d.ok {
+		d.class = chess.UnknownMove
+	}
+}
+
+func (d *moveDecoder) decodePawnMove() {
+	d.class = chess.PawnMove
+	d.pieceToMove = chess.Pawn
+	col := chess.Col(d.currentChar())
+	d.advance()
+
+	if isRank(d.currentChar()) {
+		d.decodePawnMoveWithRank(col)
+	} else {
+		d.decodePawnCapture(col)
+	}
+
+	if d.ok {
+		d.checkPromotion()
+	}
+}
+
+func (d *moveDecoder) decodePawnMoveWithRank(col chess.Col) {
+	rank := chess.Rank(d.currentChar())
+	d.advance()
+	d.skipCapture()
+
+	if isCol(d.currentChar()) {
+		d.fromCol = col
+		d.fromRank = rank
+		d.toCol = chess.Col(d.currentChar())
+		d.advance()
+
+		if isRank(d.currentChar()) {
+			d.toRank = chess.Rank(d.currentChar())
+			d.advance()
+		}
+	} else {
+		d.toCol = col
+		d.toRank = rank
+	}
+}
+
+func (d *moveDecoder) decodePawnCapture(col chess.Col) {
+	d.skipCapture()
+
+	if !isCol(d.currentChar()) {
+		d.ok = false
+		return
+	}
+
+	d.fromCol = col
+	d.toCol = chess.Col(d.currentChar())
+	d.advance()
+
+	if isRank(d.currentChar()) {
+		d.toRank = chess.Rank(d.currentChar())
+		d.advance()
+	}
+
+	// Sanity check: from column must be adjacent to target column (or 'b' for ambiguity)
+	if d.fromCol != 'b' && !d.isAdjacentCol(d.fromCol, d.toCol) {
+		d.ok = false
+	}
+}
+
+func (d *moveDecoder) isAdjacentCol(from, to chess.Col) bool {
+	return from == chess.Col(byte(to)+1) || from == chess.Col(byte(to)-1)
+}
+
+func (d *moveDecoder) checkPromotion() {
+	if d.currentChar() == '=' {
+		d.advance()
+	}
+
+	if piece := isPiece(d.remaining()); piece != chess.Empty {
+		d.class = chess.PawnMoveWithPromotion
+		d.promotedPiece = piece
+		d.advance()
+	} else if d.currentChar() == 'b' {
+		d.class = chess.PawnMoveWithPromotion
+		d.promotedPiece = chess.Bishop
+		d.advance()
+	}
+}
+
+func (d *moveDecoder) decodePieceMove() {
+	d.pieceToMove = isPiece(d.remaining())
+	d.class = chess.PieceMove
+
+	// Handle two-character Russian King
+	if d.currentChar() == RussianKnightOrKing && d.pieceToMove == chess.King {
+		d.advance()
+	}
+	d.advance()
+
+	if isRank(d.currentChar()) {
+		d.decodePieceMoveWithDisambiguatingRank()
+	} else {
+		d.decodePieceMoveStandard()
+	}
+}
+
+func (d *moveDecoder) decodePieceMoveWithDisambiguatingRank() {
+	d.fromRank = chess.Rank(d.currentChar())
+	d.advance()
+	d.skipCapture()
+
+	if !isCol(d.currentChar()) {
+		d.ok = false
+		return
+	}
+
+	d.toCol = chess.Col(d.currentChar())
+	d.advance()
+
+	if isRank(d.currentChar()) {
+		d.toRank = chess.Rank(d.currentChar())
+		d.advance()
+	}
+}
+
+func (d *moveDecoder) decodePieceMoveStandard() {
+	if isCapture(d.currentChar()) {
+		d.advance()
+		d.decodeTargetSquare()
+		return
+	}
+
+	if !isCol(d.currentChar()) {
+		d.ok = false
+		return
+	}
+
+	col := chess.Col(d.currentChar())
+	d.advance()
+	d.skipCapture()
+
+	if isRank(d.currentChar()) {
+		d.decodePieceMoveWithColAndRank(col)
+	} else if isCol(d.currentChar()) {
+		d.decodePieceMoveWithDisambiguatingCol(col)
+	} else {
+		d.ok = false
+	}
+}
+
+func (d *moveDecoder) decodeTargetSquare() {
+	if !isCol(d.currentChar()) {
+		d.ok = false
+		return
+	}
+
+	d.toCol = chess.Col(d.currentChar())
+	d.advance()
+
+	if !isRank(d.currentChar()) {
+		d.ok = false
+		return
+	}
+
+	d.toRank = chess.Rank(d.currentChar())
+	d.advance()
+}
+
+func (d *moveDecoder) decodePieceMoveWithColAndRank(col chess.Col) {
+	rank := chess.Rank(d.currentChar())
+	d.advance()
+	d.skipCapture()
+
+	if isCol(d.currentChar()) {
+		// Full coordinates: Re1d1
+		d.fromCol = col
+		d.fromRank = rank
+		d.toCol = chess.Col(d.currentChar())
+		d.advance()
+
+		if !isRank(d.currentChar()) {
+			d.ok = false
+			return
+		}
+		d.toRank = chess.Rank(d.currentChar())
+		d.advance()
+	} else {
+		// Simple move: Re1
+		d.toCol = col
+		d.toRank = rank
+	}
+}
+
+func (d *moveDecoder) decodePieceMoveWithDisambiguatingCol(col chess.Col) {
+	d.fromCol = col
+	d.toCol = chess.Col(d.currentChar())
+	d.advance()
+
+	if !isRank(d.currentChar()) {
+		d.ok = false
+		return
+	}
+	d.toRank = chess.Rank(d.currentChar())
+	d.advance()
+}
+
+func (d *moveDecoder) decodeCastling() {
+	d.advance()
+
+	if d.currentChar() == '-' {
+		d.advance()
+	}
+
+	if !isCastlingChar(d.currentChar()) {
+		d.ok = false
+		return
+	}
+
+	d.advance()
+	if d.currentChar() == '-' {
+		d.advance()
+	}
+
+	if isCastlingChar(d.currentChar()) {
+		d.class = chess.QueensideCastle
+		d.advance()
+	} else {
+		d.class = chess.KingsideCastle
+	}
+	d.pieceToMove = chess.King
+}
+
+func (d *moveDecoder) validateTrailing() {
+	if !d.ok || d.class == chess.NullMove {
+		return
+	}
+
+	// Skip trailing check symbols
+	for isCheck(d.currentChar()) {
+		d.advance()
+	}
+
+	if d.currentChar() == 0 {
+		return
+	}
+
+	// Check for en passant notation
+	remaining := d.remaining()
+	if d.class == chess.PawnMove && (strings.HasSuffix(remaining, "ep") || strings.HasSuffix(remaining, "e.p.")) {
+		d.class = chess.EnPassantPawnMove
+		return
+	}
+
+	d.ok = false
 }
 
 // DecodeAlgebraic refines move details using board context.
@@ -358,26 +408,31 @@ func DecodeAlgebraic(move *chess.Move, board *chess.Board) *chess.Move {
 	colouredPiece := board.GetByIndex(fromC, fromR)
 	pieceToMove := chess.ExtractPiece(colouredPiece)
 
-	if pieceToMove != chess.Empty {
-		// Check for castling
-		if pieceToMove == chess.King && move.FromCol == 'e' {
-			if move.ToCol == 'g' {
-				move.Class = chess.KingsideCastle
-			} else if move.ToCol == 'c' {
-				move.Class = chess.QueensideCastle
-			} else {
-				move.Class = chess.PieceMove
-				move.PieceToMove = pieceToMove
-			}
-		} else {
-			if pieceToMove == chess.Pawn {
-				move.Class = chess.PawnMove
-			} else {
-				move.Class = chess.PieceMove
-			}
+	if pieceToMove == chess.Empty {
+		return move
+	}
+
+	// Check for castling (king moving from e-file)
+	if pieceToMove == chess.King && move.FromCol == 'e' {
+		switch move.ToCol {
+		case 'g':
+			move.Class = chess.KingsideCastle
+		case 'c':
+			move.Class = chess.QueensideCastle
+		default:
+			move.Class = chess.PieceMove
 			move.PieceToMove = pieceToMove
 		}
+		return move
 	}
+
+	// Standard move classification
+	if pieceToMove == chess.Pawn {
+		move.Class = chess.PawnMove
+	} else {
+		move.Class = chess.PieceMove
+	}
+	move.PieceToMove = pieceToMove
 
 	return move
 }

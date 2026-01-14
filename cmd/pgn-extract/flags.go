@@ -112,81 +112,90 @@ var (
 
 // applyFlags applies command-line flags to the configuration.
 func applyFlags(cfg *config.Config) {
-	// Tag output
-	if *sevenTagOnly {
+	applyTagOutputFlags(cfg)
+	applyContentFlags(cfg)
+	applyOutputFormatFlags(cfg)
+	applyMoveBoundsFlags(cfg)
+	applyAnnotationFlags(cfg)
+	applyFilterFlags(cfg)
+
+	if *quiet {
+		cfg.Verbosity = 0
+	}
+	cfg.CheckOnly = *reportOnly
+}
+
+// applyTagOutputFlags configures tag output settings.
+func applyTagOutputFlags(cfg *config.Config) {
+	switch {
+	case *noTags:
+		cfg.Output.TagFormat = config.NoTags
+	case *sevenTagOnly:
 		cfg.Output.TagFormat = config.SevenTagRoster
 	}
-	if *noTags {
-		cfg.Output.TagFormat = config.NoTags
-	}
+}
 
-	// Content
+// applyContentFlags configures content output settings.
+func applyContentFlags(cfg *config.Config) {
 	cfg.Output.KeepComments = !*noComments
 	cfg.Output.KeepNAGs = !*noNAGs
 	cfg.Output.KeepVariations = !*noVariations
 	cfg.Output.KeepResults = !*noResults
 	cfg.Output.StripClockAnnotations = *noClocks
-
-	// Line length
+	cfg.Output.JSONFormat = *jsonOutput
 	cfg.Output.MaxLineLength = uint(*lineLength)
+}
 
-	// Output format
-	switch *outputFormat {
-	case "lalg":
-		cfg.Output.Format = config.LALG
-	case "halg":
-		cfg.Output.Format = config.HALG
-	case "elalg":
-		cfg.Output.Format = config.ELALG
-	case "uci":
-		cfg.Output.Format = config.UCI
-	case "epd":
-		cfg.Output.Format = config.EPD
-	case "fen":
-		cfg.Output.Format = config.FEN
-	default:
+// applyOutputFormatFlags configures the output format.
+func applyOutputFormatFlags(cfg *config.Config) {
+	formatMap := map[string]config.OutputFormat{
+		"lalg":  config.LALG,
+		"halg":  config.HALG,
+		"elalg": config.ELALG,
+		"uci":   config.UCI,
+		"epd":   config.EPD,
+		"fen":   config.FEN,
+	}
+
+	if format, ok := formatMap[*outputFormat]; ok {
+		cfg.Output.Format = format
+	} else {
 		cfg.Output.Format = config.SAN
 	}
+}
 
-	// Verbosity
-	if *quiet {
-		cfg.Verbosity = 0
+// applyMoveBoundsFlags configures ply and move bounds.
+func applyMoveBoundsFlags(cfg *config.Config) {
+	hasMoveBounds := *minPly > 0 || *maxPly > 0 || *minMoves > 0 || *maxMoves > 0
+	if !hasMoveBounds {
+		return
 	}
 
-	// JSON output
-	cfg.Output.JSONFormat = *jsonOutput
-
-	// Ply/move bounds
-	if *minPly > 0 || *maxPly > 0 || *minMoves > 0 || *maxMoves > 0 {
-		cfg.Filter.CheckMoveBounds = true
-		if *minMoves > 0 {
-			cfg.Filter.LowerMoveBound = uint(*minMoves)
-		}
-		if *maxMoves > 0 {
-			cfg.Filter.UpperMoveBound = uint(*maxMoves)
-		}
+	cfg.Filter.CheckMoveBounds = true
+	if *minMoves > 0 {
+		cfg.Filter.LowerMoveBound = uint(*minMoves)
 	}
+	if *maxMoves > 0 {
+		cfg.Filter.UpperMoveBound = uint(*maxMoves)
+	}
+}
 
-	// Annotations
+// applyAnnotationFlags configures annotation and tag fixing settings.
+func applyAnnotationFlags(cfg *config.Config) {
 	cfg.Annotation.AddPlyCount = *addPlyCount
 	cfg.Annotation.AddFENComments = *addFENComments
 	cfg.Annotation.AddHashComments = *addHashComments
 	cfg.Annotation.AddHashTag = *addHashcodeTag
-
-	// Tag fixing
 	cfg.Annotation.FixResultTags = *fixResultTags
 	cfg.Annotation.FixTagStrings = *fixTagStrings
+}
 
-	// Game feature matching
+// applyFilterFlags configures game filter settings.
+func applyFilterFlags(cfg *config.Config) {
 	cfg.Filter.MatchCheckmate = *checkmateFilter
 	cfg.Filter.MatchStalemate = *stalemateFilter
 	cfg.Filter.CheckFiftyMoveRule = *fiftyMoveFilter
 	cfg.Filter.CheckRepetition = *repetitionFilter
 	cfg.Filter.MatchUnderpromotion = *underpromotionFilter
-
-	// Soundex
 	cfg.Filter.UseSoundex = *useSoundex
-
-	// Report only mode
-	cfg.CheckOnly = *reportOnly
 }

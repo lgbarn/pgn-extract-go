@@ -126,12 +126,18 @@ var SevenTagRoster = []string{
 	"Result",
 }
 
+// sevenTagRosterSet provides O(1) lookup for seven tag roster membership.
+var sevenTagRosterSet map[string]struct{}
+
+func init() {
+	sevenTagRosterSet = make(map[string]struct{}, len(SevenTagRoster))
+	for _, tag := range SevenTagRoster {
+		sevenTagRosterSet[tag] = struct{}{}
+	}
+}
+
 // IsSevenTagRosterTag returns true if the tag is one of the seven required tags.
 func IsSevenTagRosterTag(tag string) bool {
-	for _, t := range SevenTagRoster {
-		if t == tag {
-			return true
-		}
-	}
-	return false
+	_, ok := sevenTagRosterSet[tag]
+	return ok
 }

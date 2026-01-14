@@ -1,7 +1,16 @@
 package cql
 
+import "strings"
+
 // Transform functions
 type squareTransform func(col, rank int) (int, int)
+
+// colorSwapMap maps piece characters to their opposite color equivalents.
+var colorSwapMap = map[rune]rune{
+	'K': 'k', 'Q': 'q', 'R': 'r', 'B': 'b', 'N': 'n', 'P': 'p',
+	'k': 'K', 'q': 'Q', 'r': 'R', 'b': 'B', 'n': 'N', 'p': 'P',
+	'A': 'a', 'a': 'A',
+}
 
 func flipHorizontal(col, rank int) (int, int) {
 	return 7 - col, rank // a↔h, b↔g, etc.
@@ -197,44 +206,16 @@ func (e *Evaluator) transformSquareNode(s *SquareNode, transform squareTransform
 
 // transformPieceNodeColor swaps piece colors in a piece node.
 func (e *Evaluator) transformPieceNodeColor(p *PieceNode) *PieceNode {
-	// Swap piece colors in the designator
-	desig := p.Designator
-	var newDesig string
+	var sb strings.Builder
+	sb.Grow(len(p.Designator))
 
-	for _, c := range desig {
-		switch c {
-		case 'K':
-			newDesig += "k"
-		case 'Q':
-			newDesig += "q"
-		case 'R':
-			newDesig += "r"
-		case 'B':
-			newDesig += "b"
-		case 'N':
-			newDesig += "n"
-		case 'P':
-			newDesig += "p"
-		case 'k':
-			newDesig += "K"
-		case 'q':
-			newDesig += "Q"
-		case 'r':
-			newDesig += "R"
-		case 'b':
-			newDesig += "B"
-		case 'n':
-			newDesig += "N"
-		case 'p':
-			newDesig += "P"
-		case 'A':
-			newDesig += "a"
-		case 'a':
-			newDesig += "A"
-		default:
-			newDesig += string(c)
+	for _, c := range p.Designator {
+		if swapped, ok := colorSwapMap[c]; ok {
+			sb.WriteRune(swapped)
+		} else {
+			sb.WriteRune(c)
 		}
 	}
 
-	return &PieceNode{Designator: newDesig}
+	return &PieceNode{Designator: sb.String()}
 }

@@ -119,29 +119,10 @@ func (gf *GameFilter) MatchGame(game *chess.Game) bool {
 		return true // no criteria = match all
 	}
 
-	// Check tag criteria if present
-	tagMatches := true
-	if hasTagCriteria {
-		tagMatches = gf.TagMatcher.MatchGame(game)
-	}
+	tagMatches := !hasTagCriteria || gf.TagMatcher.MatchGame(game)
+	positionMatches := !hasPositionCriteria || gf.PositionMatcher.MatchGame(game) != nil
 
-	// Check position criteria if present
-	positionMatches := true
-	if hasPositionCriteria {
-		positionMatches = gf.PositionMatcher.MatchGame(game) != nil
-	}
-
-	// If both types of criteria are present, both must match (AND)
-	// If only one type, that type must match
-	if hasTagCriteria && hasPositionCriteria {
-		if gf.RequireBoth {
-			return tagMatches && positionMatches
-		}
-		// Default: both must match when both are specified
-		return tagMatches && positionMatches
-	}
-
-	// Only one type of criteria is present
+	// Both criteria types must match when present (AND logic)
 	return tagMatches && positionMatches
 }
 

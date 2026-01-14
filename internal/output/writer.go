@@ -70,10 +70,8 @@ type JSONWriter struct {
 // By default, it batches games and writes them as an array on Close().
 func NewJSONWriter(w io.Writer, cfg *config.Config) *JSONWriter {
 	return &JSONWriter{
-		w:      w,
-		cfg:    cfg,
-		games:  make([]*chess.Game, 0),
-		single: false,
+		w:   w,
+		cfg: cfg,
 	}
 }
 
@@ -107,18 +105,14 @@ func (jw *JSONWriter) Flush() error {
 		return nil
 	}
 
-	output := &JSONOutput{
-		Games: make([]*JSONGame, 0, len(jw.games)),
-	}
-
-	for _, game := range jw.games {
-		jsonGame := GameToJSON(game, jw.cfg)
-		output.Games = append(output.Games, jsonGame)
+	jsonGames := make([]*JSONGame, len(jw.games))
+	for i, game := range jw.games {
+		jsonGames[i] = GameToJSON(game, jw.cfg)
 	}
 
 	enc := json.NewEncoder(jw.w)
 	enc.SetIndent("", "  ")
-	err := enc.Encode(output)
+	err := enc.Encode(&JSONOutput{Games: jsonGames})
 
 	// Clear buffer after writing
 	jw.games = jw.games[:0]

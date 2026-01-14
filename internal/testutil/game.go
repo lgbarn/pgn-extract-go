@@ -16,8 +16,7 @@ import (
 // parsing fails or no games are found. Use this for tests where parse failure
 // is an acceptable outcome.
 func ParseTestGame(pgn string) *chess.Game {
-	games := ParseTestGames(pgn)
-	if len(games) > 0 {
+	if games := ParseTestGames(pgn); len(games) > 0 {
 		return games[0]
 	}
 	return nil

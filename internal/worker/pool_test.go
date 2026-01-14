@@ -8,81 +8,69 @@ import (
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
 )
 
+// noopProcessFunc returns a basic process function that does nothing.
+func noopProcessFunc() ProcessFunc {
+	return func(item WorkItem) ProcessResult {
+		return ProcessResult{Game: item.Game, Index: item.Index}
+	}
+}
+
+// countingProcessFunc returns a process function that increments a counter.
+func countingProcessFunc(counter *int32) ProcessFunc {
+	return func(item WorkItem) ProcessResult {
+		atomic.AddInt32(counter, 1)
+		return ProcessResult{Game: item.Game, Index: item.Index, Matched: true}
+	}
+}
+
+// collectResults drains the result channel and returns the count.
+func collectResults(pool *Pool) int {
+	count := 0
+	for range pool.Results() {
+		count++
+	}
+	return count
+}
+
 // TestPoolBasic tests basic worker pool functionality.
 func TestPoolBasic(t *testing.T) {
 	var processed int32
-
-	processFunc := func(item WorkItem) ProcessResult {
-		atomic.AddInt32(&processed, 1)
-		return ProcessResult{
-			Game:    item.Game,
-			Index:   item.Index,
-			Matched: true,
-		}
-	}
-
-	pool := NewPool(4, 10, processFunc)
+	pool := NewPool(4, 10, countingProcessFunc(&processed))
 	pool.Start()
 
-	// Submit 10 items
-	for i := 0; i < 10; i++ {
+	const numItems = 10
+	for i := 0; i < numItems; i++ {
 		pool.Submit(WorkItem{
 			Game:  &chess.Game{Tags: map[string]string{"Event": "Test"}},
 			Index: i,
 		})
 	}
 
-	// Close and collect results
-	go func() {
-		pool.Close()
-	}()
+	go pool.Close()
 
-	resultCount := 0
-	for range pool.Results() {
-		resultCount++
+	resultCount := collectResults(pool)
+	if resultCount != numItems {
+		t.Errorf("results = %d; want %d", resultCount, numItems)
 	}
-
-	if resultCount != 10 {
-		t.Errorf("Expected 10 results, got %d", resultCount)
-	}
-
-	if atomic.LoadInt32(&processed) != 10 {
-		t.Errorf("Expected 10 processed, got %d", processed)
+	if got := atomic.LoadInt32(&processed); got != numItems {
+		t.Errorf("processed = %d; want %d", got, numItems)
 	}
 }
 
 // TestPoolSingleWorker tests pool with single worker.
 func TestPoolSingleWorker(t *testing.T) {
-	processFunc := func(item WorkItem) ProcessResult {
-		return ProcessResult{
-			Game:    item.Game,
-			Index:   item.Index,
-			Matched: true,
-		}
-	}
-
-	pool := NewPool(1, 5, processFunc)
+	pool := NewPool(1, 5, noopProcessFunc())
 	pool.Start()
 
-	// Submit items
-	for i := 0; i < 5; i++ {
-		pool.Submit(WorkItem{
-			Game:  &chess.Game{},
-			Index: i,
-		})
+	const numItems = 5
+	for i := 0; i < numItems; i++ {
+		pool.Submit(WorkItem{Game: &chess.Game{}, Index: i})
 	}
 
-	go func() {
-		pool.Close()
-	}()
+	go pool.Close()
 
-	resultCount := 0
-	for range pool.Results() {
-		resultCount++
-	}
-
-	if resultCount != 5 {
-		t.Errorf("Expected 5 results, got %d", resultCount)
+	if got := collectResults(pool); got != numItems {
+		t.Errorf("results = %d; want %d", got, numItems)
 	}
 }
 
@@ -90,62 +78,45 @@ func TestPoolSingleWorker(t *testing.T) {
 func TestPoolEarlyStop(t *testing.T) {
 	var processedCount int32
 
-	processFunc := func(item WorkItem) ProcessResult {
-		time.Sleep(10 * time.Millisecond) // Simulate work
+	slowProcessFunc := func(item WorkItem) ProcessResult {
+		time.Sleep(10 * time.Millisecond)
 		atomic.AddInt32(&processedCount, 1)
 		return ProcessResult{Game: item.Game, Index: item.Index}
 	}
 
-	pool := NewPool(2, 100, processFunc)
+	pool := NewPool(2, 100, slowProcessFunc)
 	pool.Start()
 
-	// Submit many items
-	for i := 0; i < 50; i++ {
-		pool.Submit(WorkItem{
-			Game:  &chess.Game{},
-			Index: i,
-		})
+	const numItems = 50
+	for i := 0; i < numItems; i++ {
+		pool.Submit(WorkItem{Game: &chess.Game{}, Index: i})
 	}
 
-	// Stop early after a short delay
 	time.Sleep(30 * time.Millisecond)
 	pool.Stop()
 
-	// Close to drain
-	go func() {
-		pool.Close()
-	}()
+	go pool.Close()
+	collectResults(pool)
 
-	// Count results
-	resultCount := 0
-	for range pool.Results() {
-		resultCount++
-	}
-
-	// Should have processed fewer than 50 due to early stop
-	processed := int(atomic.LoadInt32(&processedCount))
-	if processed >= 50 {
-		t.Logf("Early stop may not have prevented all processing: %d processed", processed)
+	// Should have processed fewer than total due to early stop
+	if processed := atomic.LoadInt32(&processedCount); processed >= numItems {
+		t.Logf("early stop may not have prevented all processing: %d processed", processed)
 	}
 }
 
 // TestPoolIsStopped tests the IsStopped method.
 func TestPoolIsStopped(t *testing.T) {
-	processFunc := func(item WorkItem) ProcessResult {
-		return ProcessResult{}
-	}
-
-	pool := NewPool(2, 10, processFunc)
+	pool := NewPool(2, 10, noopProcessFunc())
 	pool.Start()
 
 	if pool.IsStopped() {
-		t.Error("Pool should not be stopped initially")
+		t.Error("pool should not be stopped initially")
 	}
 
 	pool.Stop()
 
 	if !pool.IsStopped() {
-		t.Error("Pool should be stopped after Stop()")
+		t.Error("pool should be stopped after Stop()")
 	}
 
 	pool.Close()
@@ -153,25 +124,24 @@ func TestPoolIsStopped(t *testing.T) {
 
 // TestPoolTrySubmit tests non-blocking submission.
 func TestPoolTrySubmit(t *testing.T) {
-	processFunc := func(item WorkItem) ProcessResult {
-		time.Sleep(100 * time.Millisecond) // Slow processing
+	slowProcessFunc := func(item WorkItem) ProcessResult {
+		time.Sleep(100 * time.Millisecond)
 		return ProcessResult{}
 	}
 
-	// Small buffer to test blocking
-	pool := NewPool(1, 2, processFunc)
+	// Small buffer to test blocking behavior
+	pool := NewPool(1, 2, slowProcessFunc)
 	pool.Start()
 
 	// First two should succeed (buffer size 2)
 	if !pool.TrySubmit(WorkItem{Game: &chess.Game{}, Index: 0}) {
-		t.Error("First TrySubmit should succeed")
+		t.Error("first TrySubmit should succeed")
 	}
 	if !pool.TrySubmit(WorkItem{Game: &chess.Game{}, Index: 1}) {
-		t.Error("Second TrySubmit should succeed")
+		t.Error("second TrySubmit should succeed")
 	}
 
-	// Third might fail if buffer is full
-	// (depends on timing, so we just test that it doesn't panic)
+	// Third might fail if buffer is full (timing-dependent, just verify no panic)
 	pool.TrySubmit(WorkItem{Game: &chess.Game{}, Index: 2})
 
 	// After stop, TrySubmit should return false
@@ -185,74 +155,60 @@ func TestPoolTrySubmit(t *testing.T) {
 
 // TestPoolNumWorkers tests NumWorkers method.
 func TestPoolNumWorkers(t *testing.T) {
-	processFunc := func(item WorkItem) ProcessResult {
-		return ProcessResult{}
-	}
-
 	tests := []struct {
+		name     string
 		input    int
 		expected int
 	}{
-		{4, 4},
-		{1, 1},
-		{0, 1},  // Should default to 1
-		{-1, 1}, // Should default to 1
+		{"valid workers", 4, 4},
+		{"minimum workers", 1, 1},
+		{"zero defaults to 1", 0, 1},
+		{"negative defaults to 1", -1, 1},
 	}
 
 	for _, tt := range tests {
-		pool := NewPool(tt.input, 10, processFunc)
-		if pool.NumWorkers() != tt.expected {
-			t.Errorf("NewPool(%d): expected %d workers, got %d", tt.input, tt.expected, pool.NumWorkers())
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			pool := NewPool(tt.input, 10, noopProcessFunc())
+			if got := pool.NumWorkers(); got != tt.expected {
+				t.Errorf("NumWorkers() = %d; want %d", got, tt.expected)
+			}
+		})
 	}
 }
 
-// TestPoolResultOrder tests that results may arrive out of order.
+// TestPoolResultOrder tests that all results are received regardless of order.
 func TestPoolResultOrder(t *testing.T) {
-	processFunc := func(item WorkItem) ProcessResult {
-		// Variable delay based on index to encourage out-of-order completion
+	variableDelayFunc := func(item WorkItem) ProcessResult {
 		if item.Index%2 == 0 {
 			time.Sleep(10 * time.Millisecond)
 		}
-		return ProcessResult{
-			Game:  item.Game,
-			Index: item.Index,
-		}
+		return ProcessResult{Game: item.Game, Index: item.Index}
 	}
 
-	pool := NewPool(4, 20, processFunc)
+	pool := NewPool(4, 20, variableDelayFunc)
 	pool.Start()
 
-	// Submit items
-	for i := 0; i < 10; i++ {
-		pool.Submit(WorkItem{
-			Game:  &chess.Game{},
-			Index: i,
-		})
+	const numItems = 10
+	for i := 0; i < numItems; i++ {
+		pool.Submit(WorkItem{Game: &chess.Game{}, Index: i})
 	}
 
-	go func() {
-		pool.Close()
-	}()
+	go pool.Close()
 
-	// Collect results
-	var indices []int
-	for result := range pool.Results() {
-		indices = append(indices, result.Index)
-	}
-
-	if len(indices) != 10 {
-		t.Errorf("Expected 10 results, got %d", len(indices))
-	}
-
-	// Check that all indices are present (order may differ)
+	// Collect all result indices
 	seen := make(map[int]bool)
-	for _, idx := range indices {
-		seen[idx] = true
+	for result := range pool.Results() {
+		seen[result.Index] = true
 	}
-	for i := 0; i < 10; i++ {
+
+	if len(seen) != numItems {
+		t.Errorf("received %d results; want %d", len(seen), numItems)
+	}
+
+	// Verify all indices are present
+	for i := 0; i < numItems; i++ {
 		if !seen[i] {
-			t.Errorf("Missing index %d in results", i)
+			t.Errorf("missing index %d in results", i)
 		}
 	}
 }
@@ -260,48 +216,28 @@ func TestPoolResultOrder(t *testing.T) {
 // TestPoolNoRace is designed to be run with -race flag.
 func TestPoolNoRace(t *testing.T) {
 	var counter int32
-
-	processFunc := func(item WorkItem) ProcessResult {
-		atomic.AddInt32(&counter, 1)
-		return ProcessResult{
-			Game:    item.Game,
-			Index:   item.Index,
-			Matched: atomic.LoadInt32(&counter)%2 == 0,
-		}
-	}
-
-	pool := NewPool(8, 50, processFunc)
+	pool := NewPool(8, 50, countingProcessFunc(&counter))
 	pool.Start()
 
-	// Submit items concurrently
+	const numItems = 100
 	go func() {
-		for i := 0; i < 100; i++ {
-			pool.Submit(WorkItem{
-				Game:  &chess.Game{},
-				Index: i,
-			})
+		for i := 0; i < numItems; i++ {
+			pool.Submit(WorkItem{Game: &chess.Game{}, Index: i})
 		}
 		pool.Close()
 	}()
 
-	// Read results
-	for range pool.Results() {
-		// Just drain
-	}
+	collectResults(pool)
 
-	if atomic.LoadInt32(&counter) != 100 {
-		t.Errorf("Expected 100 processed, got %d", counter)
+	if got := atomic.LoadInt32(&counter); got != numItems {
+		t.Errorf("processed = %d; want %d", got, numItems)
 	}
 }
 
 // TestNewPoolWithOptions tests the functional options constructor.
 func TestNewPoolWithOptions(t *testing.T) {
-	processFunc := func(item WorkItem) ProcessResult {
-		return ProcessResult{Game: item.Game, Index: item.Index, Matched: true}
-	}
-
 	t.Run("defaults", func(t *testing.T) {
-		pool := NewPoolWithOptions(processFunc)
+		pool := NewPoolWithOptions(noopProcessFunc())
 		if pool.NumWorkers() != 1 {
 			t.Errorf("default workers = %d; want 1", pool.NumWorkers())
 		}
@@ -311,24 +247,21 @@ func TestNewPoolWithOptions(t *testing.T) {
 	})
 
 	t.Run("with workers", func(t *testing.T) {
-		pool := NewPoolWithOptions(processFunc, WithWorkers(4))
+		pool := NewPoolWithOptions(noopProcessFunc(), WithWorkers(4))
 		if pool.NumWorkers() != 4 {
 			t.Errorf("NumWorkers() = %d; want 4", pool.NumWorkers())
 		}
 	})
 
 	t.Run("with buffer size", func(t *testing.T) {
-		pool := NewPoolWithOptions(processFunc, WithBufferSize(50))
+		pool := NewPoolWithOptions(noopProcessFunc(), WithBufferSize(50))
 		if pool.bufferSize != 50 {
 			t.Errorf("bufferSize = %d; want 50", pool.bufferSize)
 		}
 	})
 
 	t.Run("with multiple options", func(t *testing.T) {
-		pool := NewPoolWithOptions(processFunc,
-			WithWorkers(8),
-			WithBufferSize(100),
-		)
+		pool := NewPoolWithOptions(noopProcessFunc(), WithWorkers(8), WithBufferSize(100))
 		if pool.NumWorkers() != 8 {
 			t.Errorf("NumWorkers() = %d; want 8", pool.NumWorkers())
 		}
@@ -338,14 +271,14 @@ func TestNewPoolWithOptions(t *testing.T) {
 	})
 
 	t.Run("invalid workers ignored", func(t *testing.T) {
-		pool := NewPoolWithOptions(processFunc, WithWorkers(0))
+		pool := NewPoolWithOptions(noopProcessFunc(), WithWorkers(0))
 		if pool.NumWorkers() != 1 {
 			t.Errorf("NumWorkers() = %d; want 1 (default)", pool.NumWorkers())
 		}
 	})
 
 	t.Run("invalid buffer size ignored", func(t *testing.T) {
-		pool := NewPoolWithOptions(processFunc, WithBufferSize(-5))
+		pool := NewPoolWithOptions(noopProcessFunc(), WithBufferSize(-5))
 		if pool.bufferSize != 10 {
 			t.Errorf("bufferSize = %d; want 10 (default)", pool.bufferSize)
 		}
@@ -353,28 +286,19 @@ func TestNewPoolWithOptions(t *testing.T) {
 
 	t.Run("functional with options", func(t *testing.T) {
 		var processed int32
-		countFunc := func(item WorkItem) ProcessResult {
-			atomic.AddInt32(&processed, 1)
-			return ProcessResult{Game: item.Game, Index: item.Index}
-		}
-
-		pool := NewPoolWithOptions(countFunc,
-			WithWorkers(2),
-			WithBufferSize(5),
-		)
+		pool := NewPoolWithOptions(countingProcessFunc(&processed), WithWorkers(2), WithBufferSize(5))
 		pool.Start()
 
-		for i := 0; i < 5; i++ {
+		const numItems = 5
+		for i := 0; i < numItems; i++ {
 			pool.Submit(WorkItem{Game: &chess.Game{}, Index: i})
 		}
 
 		go pool.Close()
+		collectResults(pool)
 
-		for range pool.Results() {
-		}
-
-		if atomic.LoadInt32(&processed) != 5 {
-			t.Errorf("processed = %d; want 5", processed)
+		if got := atomic.LoadInt32(&processed); got != numItems {
+			t.Errorf("processed = %d; want %d", got, numItems)
 		}
 	})
 }

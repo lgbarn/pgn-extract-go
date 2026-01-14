@@ -13,12 +13,9 @@ func Soundex(name string) string {
 		return ""
 	}
 
-	// Convert to uppercase and clean
-	name = strings.ToUpper(strings.TrimSpace(name))
-
-	// Keep only letters
+	// Convert to uppercase and keep only letters
 	var cleaned strings.Builder
-	for _, r := range name {
+	for _, r := range strings.ToUpper(strings.TrimSpace(name)) {
 		if unicode.IsLetter(r) {
 			cleaned.WriteRune(r)
 		}
@@ -29,37 +26,17 @@ func Soundex(name string) string {
 		return ""
 	}
 
-	// Get the first letter
-	result := string(s[0])
-
-	// Soundex codes - modified for chess names
-	// Group similar sounding consonants
-	getCode := func(c byte) byte {
-		switch c {
-		case 'B', 'F', 'P', 'V', 'W':
-			return '1'
-		case 'C', 'G', 'J', 'K', 'Q', 'S', 'X', 'Z':
-			return '2'
-		case 'D', 'T':
-			return '3'
-		case 'L':
-			return '4'
-		case 'M', 'N':
-			return '5'
-		case 'R':
-			return '6'
-		default:
-			return '0' // vowels and others
-		}
-	}
+	// Start with the first letter
+	var result strings.Builder
+	result.WriteByte(s[0])
 
 	// Process remaining characters
-	lastCode := getCode(s[0])
-	for i := 1; i < len(s) && len(result) < 6; i++ {
-		code := getCode(s[i])
+	lastCode := soundexCode(s[0])
+	for i := 1; i < len(s) && result.Len() < 6; i++ {
+		code := soundexCode(s[i])
 		// Skip vowels (0) and consecutive same codes
 		if code != '0' && code != lastCode {
-			result += string(code)
+			result.WriteByte(code)
 		}
 		if code != '0' {
 			lastCode = code
@@ -67,11 +44,32 @@ func Soundex(name string) string {
 	}
 
 	// Pad with zeros to length 6
-	for len(result) < 6 {
-		result += "0"
+	for result.Len() < 6 {
+		result.WriteByte('0')
 	}
 
-	return result
+	return result.String()
+}
+
+// soundexCode returns the soundex code for a character.
+// Groups similar sounding consonants together.
+func soundexCode(c byte) byte {
+	switch c {
+	case 'B', 'F', 'P', 'V', 'W':
+		return '1'
+	case 'C', 'G', 'J', 'K', 'Q', 'S', 'X', 'Z':
+		return '2'
+	case 'D', 'T':
+		return '3'
+	case 'L':
+		return '4'
+	case 'M', 'N':
+		return '5'
+	case 'R':
+		return '6'
+	default:
+		return '0' // vowels and others
+	}
 }
 
 // SoundexMatch checks if two names match via soundex.

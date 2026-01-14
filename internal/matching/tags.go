@@ -173,14 +173,11 @@ func (tm *TagMatcher) MatchGame(game *chess.Game) bool {
 	for _, c := range tm.criteria {
 		matches := tm.matchCriterion(game, c)
 
-		if tm.matchAll {
-			if !matches {
-				return false // AND: any failure = no match
-			}
-		} else {
-			if matches {
-				return true // OR: any success = match
-			}
+		if tm.matchAll && !matches {
+			return false // AND: any failure = no match
+		}
+		if !tm.matchAll && matches {
+			return true // OR: any success = match
 		}
 	}
 
@@ -290,7 +287,7 @@ func (tm *TagMatcher) compareValues(tagValue, criterionValue string, op TagOpera
 // Returns 0 if parsing fails.
 func parseDate(s string) int {
 	parts := strings.Split(s, ".")
-	if len(parts) < 1 {
+	if len(parts) == 0 {
 		return 0
 	}
 
@@ -300,18 +297,15 @@ func parseDate(s string) int {
 	}
 
 	month := 1
-	day := 1
-
 	if len(parts) >= 2 {
-		m, err := strconv.Atoi(strings.TrimSpace(parts[1]))
-		if err == nil && m >= 1 && m <= 12 {
+		if m, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil && m >= 1 && m <= 12 {
 			month = m
 		}
 	}
 
+	day := 1
 	if len(parts) >= 3 {
-		d, err := strconv.Atoi(strings.TrimSpace(parts[2]))
-		if err == nil && d >= 1 && d <= 31 {
+		if d, err := strconv.Atoi(strings.TrimSpace(parts[2])); err == nil && d >= 1 && d <= 31 {
 			day = d
 		}
 	}

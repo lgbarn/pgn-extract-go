@@ -176,15 +176,10 @@ func (vm *VariationMatcher) matchPositionSequence(game *chess.Game, seq []string
 // parseMoveSequence parses a line of moves into individual move texts.
 func parseMoveSequence(line string) []string {
 	var moves []string
-	parts := strings.Fields(line)
 
-	for _, part := range parts {
-		// Skip move numbers (1. 2. etc)
+	for _, part := range strings.Fields(line) {
+		// Skip move numbers (1. 2. etc) and ellipsis
 		if len(part) > 0 && (part[len(part)-1] == '.' || strings.Contains(part, "...")) {
-			continue
-		}
-		// Skip empty parts
-		if part == "" {
 			continue
 		}
 		moves = append(moves, part)
@@ -196,12 +191,7 @@ func parseMoveSequence(line string) []string {
 // normalizeMove normalizes a move text for comparison.
 func normalizeMove(text string) string {
 	// Remove annotations, check symbols, etc.
-	text = strings.TrimSpace(text)
-	text = strings.TrimSuffix(text, "+")
-	text = strings.TrimSuffix(text, "#")
-	text = strings.TrimSuffix(text, "!")
-	text = strings.TrimSuffix(text, "?")
-	return text
+	return strings.TrimRight(strings.TrimSpace(text), "+#!?")
 }
 
 // matchesFENPosition checks if the board matches a FEN position string.

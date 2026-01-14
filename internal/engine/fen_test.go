@@ -2,6 +2,7 @@ package engine
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
@@ -20,7 +21,6 @@ func TestNewBoardFromFEN(t *testing.T) {
 			fen:     InitialFEN,
 			wantErr: false,
 			checkFn: func(b *chess.Board) bool {
-				// Check some key squares
 				return b.Get('e', '1') == chess.W(chess.King) &&
 					b.Get('e', '8') == chess.B(chess.King) &&
 					b.Get('e', '2') == chess.W(chess.Pawn) &&
@@ -38,7 +38,7 @@ func TestNewBoardFromFEN(t *testing.T) {
 				return b.Get('e', '4') == chess.W(chess.Pawn) &&
 					b.Get('e', '2') == chess.Empty &&
 					b.ToMove == chess.Black &&
-					b.EnPassant == true &&
+					b.EnPassant &&
 					b.EPCol == 'e' &&
 					b.EPRank == '3'
 			},
@@ -86,7 +86,6 @@ func TestNewBoardFromFEN(t *testing.T) {
 }
 
 func TestBoardToFEN(t *testing.T) {
-	// Test round-trip: FEN -> Board -> FEN
 	tests := []string{
 		InitialFEN,
 		"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
@@ -102,14 +101,11 @@ func TestBoardToFEN(t *testing.T) {
 			}
 
 			result := BoardToFEN(board)
-			// Note: FEN strings may have slight variations (e.g., "-" vs "- -")
-			// so we compare the parsed boards instead
 			board2, err := NewBoardFromFEN(result)
 			if err != nil {
 				t.Fatalf("NewBoardFromFEN(result) error = %v", err)
 			}
 
-			// Compare key properties
 			if board.ToMove != board2.ToMove {
 				t.Errorf("ToMove mismatch: got %v, want %v", board2.ToMove, board.ToMove)
 			}
@@ -175,7 +171,6 @@ func TestApplyMove(t *testing.T) {
 			}
 
 			gotFEN := BoardToFEN(board)
-			// Parse both FENs and compare boards
 			wantBoard, _ := NewBoardFromFEN(tt.wantFEN)
 			gotBoard, _ := NewBoardFromFEN(gotFEN)
 
@@ -186,8 +181,6 @@ func TestApplyMove(t *testing.T) {
 	}
 }
 
-// TestNewBoardFromFEN_ErrorTypes verifies that FEN parsing returns
-// properly wrapped errors that can be checked with errors.Is()
 func TestNewBoardFromFEN_ErrorTypes(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -222,39 +215,13 @@ func TestNewBoardFromFEN_ErrorTypes(t *testing.T) {
 				t.Fatal("expected error, got nil")
 			}
 
-			// Check that error wraps the sentinel error
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("errors.Is(err, %v) = false, want true\nerr = %v", tt.wantErr, err)
 			}
 
-			// Check error message contains expected text
-			if tt.wantContain != "" && !containsIgnoreCase(err.Error(), tt.wantContain) {
+			if tt.wantContain != "" && !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tt.wantContain)) {
 				t.Errorf("error message %q should contain %q", err.Error(), tt.wantContain)
 			}
 		})
 	}
-}
-
-// containsIgnoreCase checks if s contains substr (case-insensitive)
-func containsIgnoreCase(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		match := true
-		for j := 0; j < len(substr); j++ {
-			cs, csub := s[i+j], substr[j]
-			if cs >= 'A' && cs <= 'Z' {
-				cs += 'a' - 'A'
-			}
-			if csub >= 'A' && csub <= 'Z' {
-				csub += 'a' - 'A'
-			}
-			if cs != csub {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
 }
