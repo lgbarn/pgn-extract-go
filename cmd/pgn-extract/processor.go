@@ -432,11 +432,6 @@ func processGameWorker(item worker.WorkItem, ctx *ProcessingContext) worker.Proc
 	return result
 }
 
-// outputGameWithAnnotations outputs a game with optional annotations
-func outputGameWithAnnotations(game *chess.Game, cfg *config.Config, gameInfo *GameAnalysis, jsonGames *[]*chess.Game) {
-	outputGameWithECOSplit(game, cfg, gameInfo, jsonGames, nil)
-}
-
 // outputGameWithECOSplit outputs a game with optional annotations and ECO-based splitting.
 func outputGameWithECOSplit(game *chess.Game, cfg *config.Config, gameInfo *GameAnalysis, jsonGames *[]*chess.Game, ecoWriter *ECOSplitWriter) {
 	// Handle split writer

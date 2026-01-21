@@ -189,23 +189,24 @@ func checkPlyBounds(plyCount int, matched bool) bool {
 		return false
 	}
 
-	// Range match (if specified)
-	if parsedPlyRange[0] > 0 || parsedPlyRange[1] > 0 {
-		if parsedPlyRange[0] > 0 && plyCount < parsedPlyRange[0] {
-			return false
-		}
-		if parsedPlyRange[1] > 0 && plyCount > parsedPlyRange[1] {
-			return false
-		}
+	// Determine effective min/max from range or individual bounds
+	minBound := *minPly
+	if parsedPlyRange[0] > minBound {
+		minBound = parsedPlyRange[0]
 	}
 
-	// Standard min/max bounds
-	if *minPly > 0 && plyCount < *minPly {
+	maxBound := *maxPly
+	if parsedPlyRange[1] > 0 && (maxBound == 0 || parsedPlyRange[1] < maxBound) {
+		maxBound = parsedPlyRange[1]
+	}
+
+	if minBound > 0 && plyCount < minBound {
 		return false
 	}
-	if *maxPly > 0 && plyCount > *maxPly {
+	if maxBound > 0 && plyCount > maxBound {
 		return false
 	}
+
 	return true
 }
 
@@ -221,23 +222,24 @@ func checkMoveBounds(plyCount int, matched bool) bool {
 		return false
 	}
 
-	// Range match (if specified)
-	if parsedMoveRange[0] > 0 || parsedMoveRange[1] > 0 {
-		if parsedMoveRange[0] > 0 && moveCount < parsedMoveRange[0] {
-			return false
-		}
-		if parsedMoveRange[1] > 0 && moveCount > parsedMoveRange[1] {
-			return false
-		}
+	// Determine effective min/max from range or individual bounds
+	minBound := *minMoves
+	if parsedMoveRange[0] > minBound {
+		minBound = parsedMoveRange[0]
 	}
 
-	// Standard min/max bounds
-	if *minMoves > 0 && moveCount < *minMoves {
+	maxBound := *maxMoves
+	if parsedMoveRange[1] > 0 && (maxBound == 0 || parsedMoveRange[1] < maxBound) {
+		maxBound = parsedMoveRange[1]
+	}
+
+	if minBound > 0 && moveCount < minBound {
 		return false
 	}
-	if *maxMoves > 0 && moveCount > *maxMoves {
+	if maxBound > 0 && moveCount > maxBound {
 		return false
 	}
+
 	return true
 }
 
@@ -258,26 +260,17 @@ func applyFeatureFilters(result *FilterResult, game *chess.Game, matched bool) b
 		return false
 	}
 
-	if *checkmateFilter && !engine.IsCheckmate(result.Board) {
+	// Board-based ending filters
+	if !applyEndingFilters(result.Board) {
 		return false
 	}
 
-	if *stalemateFilter && !engine.IsStalemate(result.Board) {
+	// GameInfo-based filters
+	if !applyGameInfoFilters(result.GameInfo) {
 		return false
 	}
 
-	if *fiftyMoveFilter && (result.GameInfo == nil || !result.GameInfo.HasFiftyMoveRule) {
-		return false
-	}
-
-	if *repetitionFilter && (result.GameInfo == nil || !result.GameInfo.HasRepetition) {
-		return false
-	}
-
-	if *underpromotionFilter && (result.GameInfo == nil || !result.GameInfo.HasUnderpromotion) {
-		return false
-	}
-
+	// Game-based filters
 	if *commentedFilter && !processing.HasComments(game) {
 		return false
 	}
@@ -290,23 +283,6 @@ func applyFeatureFilters(result *FilterResult, game *chess.Game, matched bool) b
 		return false
 	}
 
-	// Extended draw rules (Phase 3)
-	if *seventyFiveMoveFilter && (result.GameInfo == nil || !result.GameInfo.Has75MoveRule) {
-		return false
-	}
-
-	if *fiveFoldRepFilter && (result.GameInfo == nil || !result.GameInfo.Has5FoldRepetition) {
-		return false
-	}
-
-	if *insufficientFilter && (result.GameInfo == nil || !result.GameInfo.HasInsufficientMaterial) {
-		return false
-	}
-
-	if *materialOddsFilter && (result.GameInfo == nil || !result.GameInfo.HasMaterialOdds) {
-		return false
-	}
-
 	// Setup tag filtering
 	if *noSetupTags && game.HasTag("SetUp") {
 		return false
@@ -316,6 +292,53 @@ func applyFeatureFilters(result *FilterResult, game *chess.Game, matched bool) b
 		return false
 	}
 
+	return true
+}
+
+// applyEndingFilters checks board-based ending conditions.
+func applyEndingFilters(board *chess.Board) bool {
+	if *checkmateFilter && !engine.IsCheckmate(board) {
+		return false
+	}
+	if *stalemateFilter && !engine.IsStalemate(board) {
+		return false
+	}
+	return true
+}
+
+// applyGameInfoFilters checks GameInfo-based conditions.
+func applyGameInfoFilters(info *GameAnalysis) bool {
+	if info == nil {
+		// If any GameInfo filter is enabled but info is nil, fail
+		if *fiftyMoveFilter || *repetitionFilter || *underpromotionFilter ||
+			*seventyFiveMoveFilter || *fiveFoldRepFilter ||
+			*insufficientFilter || *materialOddsFilter {
+			return false
+		}
+		return true
+	}
+
+	if *fiftyMoveFilter && !info.HasFiftyMoveRule {
+		return false
+	}
+	if *repetitionFilter && !info.HasRepetition {
+		return false
+	}
+	if *underpromotionFilter && !info.HasUnderpromotion {
+		return false
+	}
+	if *seventyFiveMoveFilter && !info.Has75MoveRule {
+		return false
+	}
+	if *fiveFoldRepFilter && !info.Has5FoldRepetition {
+		return false
+	}
+	if *insufficientFilter && !info.HasInsufficientMaterial {
+		return false
+	}
+	if *materialOddsFilter && !info.HasMaterialOdds {
+		return false
+	}
 	return true
 }
 
@@ -364,19 +387,19 @@ func checkRatingWinner(game *chess.Game) bool {
 		return false
 	}
 
-	gameResult := game.Tags["Result"]
+	result := game.Tags["Result"]
+	whiteWon := result == "1-0"
+	blackWon := result == "0-1"
 
 	if *higherRatedWinner {
-		higherWon := (whiteElo > blackElo && gameResult == "1-0") ||
-			(blackElo > whiteElo && gameResult == "0-1")
+		higherWon := (whiteElo > blackElo && whiteWon) || (blackElo > whiteElo && blackWon)
 		if !higherWon {
 			return false
 		}
 	}
 
 	if *lowerRatedWinner {
-		lowerWon := (whiteElo < blackElo && gameResult == "1-0") ||
-			(blackElo < whiteElo && gameResult == "0-1")
+		lowerWon := (whiteElo < blackElo && whiteWon) || (blackElo < whiteElo && blackWon)
 		if !lowerWon {
 			return false
 		}
@@ -434,11 +457,11 @@ func IncrementGamePosition() int64 {
 // Returns true if the game should be processed, false if it should be skipped.
 func checkGamePosition(position int) bool {
 	// If selectOnly is specified, only include games at those positions
-	if selectOnlySet != nil && len(selectOnlySet) > 0 {
+	if len(selectOnlySet) > 0 {
 		return selectOnlySet[position]
 	}
 	// If skipMatching is specified, exclude games at those positions
-	if skipMatchingSet != nil && len(skipMatchingSet) > 0 {
+	if len(skipMatchingSet) > 0 {
 		return !skipMatchingSet[position]
 	}
 	return true

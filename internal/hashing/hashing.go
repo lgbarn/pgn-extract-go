@@ -61,16 +61,10 @@ func (d *DuplicateDetector) CheckAndAdd(game *chess.Game, board *chess.Board) bo
 
 // signaturesMatch checks if two game signatures match.
 func (d *DuplicateDetector) signaturesMatch(a, b GameSignature) bool {
-	if a.Hash != b.Hash {
+	if a.Hash != b.Hash || a.WeakHash != b.WeakHash {
 		return false
 	}
-	if a.WeakHash != b.WeakHash {
-		return false
-	}
-	if d.useExactMatch && a.MoveCount != b.MoveCount {
-		return false
-	}
-	return true
+	return !d.useExactMatch || a.MoveCount == b.MoveCount
 }
 
 // DuplicateCount returns the number of duplicates detected.

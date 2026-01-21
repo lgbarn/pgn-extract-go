@@ -203,7 +203,7 @@ func isValidResult(result string) bool {
 // Returns the main line game plus a game for each variation.
 // Each split game has the same header tags as the original.
 func SplitVariations(game *chess.Game) []*chess.Game {
-	games := make([]*chess.Game, 0)
+	games := make([]*chess.Game, 0, 1)
 
 	// First, output the main line
 	mainGame := copyGameHeaders(game)

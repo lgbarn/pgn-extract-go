@@ -140,7 +140,8 @@ var (
 
 	// File input options
 	fileListFile = flag.String("f", "", "File containing list of PGN files to process (one per line)")
-	argsFile     = flag.String("A", "", "File containing command-line arguments (one per line, # for comments)")
+	// Note: -A flag is handled manually before flag.Parse() in loadArgsFromFileIfSpecified
+	_ = flag.String("A", "", "File containing command-line arguments (one per line, # for comments)")
 
 	// ECO-based output splitting
 	ecoSplit = flag.Int("E", 0, "Split output by ECO code: 1=A-E, 2=A0-E9, 3=A00-E99")

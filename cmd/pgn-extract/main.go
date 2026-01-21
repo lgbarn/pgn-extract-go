@@ -519,15 +519,12 @@ func loadFileList(filename string) ([]string, error) {
 func loadArgsFromFileIfSpecified() []string {
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
-		var filename string
 
-		switch {
-		case arg == "-A" && i+1 < len(os.Args):
+		var filename string
+		if arg == "-A" && i+1 < len(os.Args) {
 			filename = os.Args[i+1]
-		case strings.HasPrefix(arg, "-A="):
+		} else if strings.HasPrefix(arg, "-A=") {
 			filename = strings.TrimPrefix(arg, "-A=")
-		default:
-			continue
 		}
 
 		if filename == "" {

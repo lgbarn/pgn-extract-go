@@ -10,12 +10,8 @@ import (
 // IsChess960Game returns true if the game is a Chess960 game.
 // This is detected by the Variant tag or non-standard castling rights.
 func IsChess960Game(game *chess.Game) bool {
-	variant := game.GetTag("Variant")
-	variant = strings.ToLower(variant)
-	if strings.Contains(variant, "960") || strings.Contains(variant, "fischerandom") {
-		return true
-	}
-	return false
+	variant := strings.ToLower(game.GetTag("Variant"))
+	return strings.Contains(variant, "960") || strings.Contains(variant, "fischerandom")
 }
 
 // IsChess960Position returns true if the board has non-standard castling positions.
