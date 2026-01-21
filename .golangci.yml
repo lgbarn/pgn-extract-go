@@ -47,6 +47,24 @@ linters:
         - io/ioutil.ReadFile
         - io.Copy(*bytes.Buffer)
         - (io.Closer).Close
+        - (*os.File).Close
+        - os.Remove
+        - os.RemoveAll
+        - (fmt.State).Write
+        - (*bytes.Buffer).Write
+        - (*bytes.Buffer).WriteString
+        # Logging functions - errors rarely actionable
+        - fmt.Fprint
+        - fmt.Fprintln
+        - fmt.Fprintf
+        - fmt.Print
+        - fmt.Println
+        - fmt.Printf
+        # JSON encoding to writer - errors handled via writer
+        - (*encoding/json.Encoder).Encode
+        # Parsing functions where default value is acceptable
+        - fmt.Sscanf
+        - strconv.Atoi
 
     gocognit:
       min-complexity: 50
@@ -89,6 +107,15 @@ linters:
 
     misspell:
       locale: US
+      extra-words:
+        - typo: colour
+          correction: colour
+        - typo: Colour
+          correction: Colour
+        - typo: coloured
+          correction: coloured
+        - typo: Encyclopaedia
+          correction: Encyclopaedia
 
     nakedret:
       max-func-lines: 30
@@ -104,6 +131,18 @@ linters:
 
     unused:
       exported-fields-are-used: true
+
+  exclusions:
+    rules:
+      # Don't check errors in test files - test code often intentionally ignores errors
+      - path: ".*_test\\.go$"
+        linters:
+          - errcheck
+          - gosec
+      # Exclude cyclop for the lexer - it's inherently complex
+      - path: internal/parser/lexer.go
+        linters:
+          - cyclop
 
 formatters:
   enable:

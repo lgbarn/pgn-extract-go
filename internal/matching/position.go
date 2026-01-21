@@ -123,7 +123,7 @@ func (pm *PositionMatcher) getStartingBoard(game *chess.Game) *chess.Board {
 			return board
 		}
 	}
-	board, _ := engine.NewBoardFromFEN(engine.InitialFEN)
+	board, _ := engine.NewBoardFromFEN(engine.InitialFEN) //nolint:errcheck // InitialFEN is known valid
 	return board
 }
 

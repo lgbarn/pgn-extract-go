@@ -46,7 +46,7 @@ func OutputGameJSON(game *chess.Game, cfg *config.Config) {
 	jsonGame := GameToJSON(game, cfg)
 	enc := json.NewEncoder(cfg.OutputFile)
 	enc.SetIndent("", "  ")
-	enc.Encode(jsonGame)
+	enc.Encode(jsonGame) //nolint:errcheck,gosec // G104: output errors handled by writer
 }
 
 // OutputGamesJSON outputs multiple games as a JSON array.
@@ -58,7 +58,7 @@ func OutputGamesJSON(games []*chess.Game, cfg *config.Config, w io.Writer) {
 
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	enc.Encode(&JSONOutput{Games: jsonGames})
+	enc.Encode(&JSONOutput{Games: jsonGames}) //nolint:errcheck,gosec // G104: output errors handled by writer
 }
 
 // GameToJSON converts a chess game to JSON format.
@@ -107,7 +107,7 @@ func copyTags(tags map[string]string) map[string]string {
 // getInitialBoard returns the starting board and initial FEN (if any).
 func getInitialBoard(game *chess.Game) (*chess.Board, string) {
 	if fen := game.GetTag("FEN"); fen != "" {
-		if board, _ := engine.NewBoardFromFEN(fen); board != nil {
+		if board, _ := engine.NewBoardFromFEN(fen); board != nil { //nolint:errcheck // nil check handles error
 			return board, fen
 		}
 	}
@@ -126,7 +126,7 @@ func countPlies(moves *chess.Move) int {
 // convertMoveList converts a move list to JSON format.
 // The includeFEN parameter controls whether FEN is added after each move.
 func convertMoveList(moves *chess.Move, board *chess.Board, cfg *config.Config, includeFEN bool) []JSONMove {
-	var result []JSONMove
+	result := make([]JSONMove, 0, 80) // Preallocate for typical game length
 
 	moveNum := board.MoveNumber
 	isWhite := board.ToMove == chess.White

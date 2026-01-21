@@ -203,10 +203,10 @@ func parseEnPassant(board *chess.Board, parts []string) {
 // parseClocks parses the halfmove clock and fullmove number fields.
 func parseClocks(board *chess.Board, parts []string) {
 	if len(parts) >= 5 {
-		fmt.Sscanf(parts[4], "%d", &board.HalfmoveClock)
+		fmt.Sscanf(parts[4], "%d", &board.HalfmoveClock) //nolint:errcheck,gosec // G104: default 0 acceptable
 	}
 	if len(parts) >= 6 {
-		fmt.Sscanf(parts[5], "%d", &board.MoveNumber)
+		fmt.Sscanf(parts[5], "%d", &board.MoveNumber) //nolint:errcheck,gosec // G104: default 0 acceptable
 	}
 }
 
@@ -297,7 +297,7 @@ func writeEnPassant(sb *strings.Builder, board *chess.Board) {
 
 // NewInitialBoard creates a board with the standard starting position.
 func NewInitialBoard() *chess.Board {
-	board, _ := NewBoardFromFEN(InitialFEN)
+	board, _ := NewBoardFromFEN(InitialFEN) //nolint:errcheck // InitialFEN is known valid
 	return board
 }
 

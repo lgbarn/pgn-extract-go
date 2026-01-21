@@ -47,7 +47,7 @@ func NewECOClassifier() *ECOClassifier {
 
 // LoadFromFile loads ECO data from a PGN file.
 func (ec *ECOClassifier) LoadFromFile(filename string) error {
-	file, err := os.Open(filename)
+	file, err := os.Open(filename) //nolint:gosec // G304: CLI tool opens user-specified files
 	if err != nil {
 		return fmt.Errorf("cannot open ECO file: %w", err)
 	}
@@ -81,7 +81,7 @@ func (ec *ECOClassifier) addECOEntry(game *chess.Game) {
 		return
 	}
 
-	board, _ := engine.NewBoardFromFEN(engine.InitialFEN)
+	board, _ := engine.NewBoardFromFEN(engine.InitialFEN) //nolint:errcheck // InitialFEN is known valid
 	var cumulativeHash uint64
 	halfMoves := 0
 
@@ -180,7 +180,7 @@ func (ec *ECOClassifier) boardForGame(game *chess.Game) *chess.Board {
 			return board
 		}
 	}
-	board, _ := engine.NewBoardFromFEN(engine.InitialFEN)
+	board, _ := engine.NewBoardFromFEN(engine.InitialFEN) //nolint:errcheck // InitialFEN is known valid
 	return board
 }
 

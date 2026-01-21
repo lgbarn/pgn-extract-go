@@ -26,7 +26,7 @@ func NewVariationMatcher() *VariationMatcher {
 // LoadFromFile loads move sequences from a file.
 // Each line is a move sequence like: "1. e4 e5 2. Nf3"
 func (vm *VariationMatcher) LoadFromFile(filename string) error {
-	file, err := os.Open(filename)
+	file, err := os.Open(filename) //nolint:gosec // G304: CLI tool opens user-specified files
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func (vm *VariationMatcher) LoadFromFile(filename string) error {
 // LoadPositionalFromFile loads positional variations from a file.
 // Each line is a FEN position.
 func (vm *VariationMatcher) LoadPositionalFromFile(filename string) error {
-	file, err := os.Open(filename)
+	file, err := os.Open(filename) //nolint:gosec // G304: CLI tool opens user-specified files
 	if err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func (vm *VariationMatcher) matchPositionSequence(game *chess.Game, seq []string
 		return true
 	}
 
-	board, _ := engine.NewBoardFromFEN(engine.InitialFEN)
+	board, _ := engine.NewBoardFromFEN(engine.InitialFEN) //nolint:errcheck // InitialFEN is known valid
 	seqIdx := 0
 
 	// Check initial position

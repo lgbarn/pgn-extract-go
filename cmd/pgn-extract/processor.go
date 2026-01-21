@@ -62,11 +62,11 @@ func NewSplitWriter(baseName string, gamesPerFile int) *SplitWriter {
 func (sw *SplitWriter) Write(p []byte) (n int, err error) {
 	if sw.currentFile == nil || sw.gameCount >= sw.gamesPerFile {
 		if sw.currentFile != nil {
-			sw.currentFile.Close()
+			sw.currentFile.Close() //nolint:errcheck,gosec // G104: cleanup before creating new file
 			sw.fileNumber++
 		}
 		filename := fmt.Sprintf("%s_%d.pgn", sw.baseName, sw.fileNumber)
-		sw.currentFile, err = os.Create(filename)
+		sw.currentFile, err = os.Create(filename) //nolint:gosec // G304: filename is derived from user-specified base name
 		if err != nil {
 			return 0, err
 		}
@@ -275,7 +275,7 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 			continue
 		}
 
-		gameInfo, _ := result.GameInfo.(*GameAnalysis)
+		gameInfo, _ := result.GameInfo.(*GameAnalysis) //nolint:errcheck // type assertion with ok
 		out, dup := handleGameOutput(result.Game, result.Board, gameInfo, ctx, &jsonGames)
 		atomic.AddInt64(&outputCount, int64(out))
 		atomic.AddInt64(&duplicateCount, int64(dup))

@@ -180,12 +180,7 @@ func (p *Parser) parseFilter() (Node, error) {
 	var args []Node
 	expectedArgs := filterArgCount(name)
 
-	for {
-		// Stop if we hit end of input, close paren
-		if p.current.Type == EOF || p.current.Type == RPAREN {
-			break
-		}
-
+	for p.current.Type != EOF && p.current.Type != RPAREN {
 		// Stop if we've collected expected number of arguments
 		if expectedArgs > 0 && len(args) >= expectedArgs {
 			break

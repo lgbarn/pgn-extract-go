@@ -107,7 +107,7 @@ func setupLogFile(cfg *config.Config) {
 	}
 
 	if *appendLog != "" {
-		file, err := os.OpenFile(*appendLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		file, err := os.OpenFile(*appendLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) //nolint:gosec // G302: 0644 is appropriate for user-created log files
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error opening log file %s: %v\n", *appendLog, err)
 			os.Exit(1)
@@ -126,7 +126,7 @@ func setupOutputFile(cfg *config.Config) {
 	var err error
 
 	if *appendOutput {
-		file, err = os.OpenFile(*outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		file, err = os.OpenFile(*outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) //nolint:gosec // G302: 0644 is appropriate for user-created output files
 	} else {
 		file, err = os.Create(*outputFile)
 	}
@@ -321,7 +321,7 @@ func processAllInputs(ctx *ProcessingContext, splitWriter *SplitWriter) (totalGa
 				break
 			}
 
-			file, err := os.Open(filename)
+			file, err := os.Open(filename) //nolint:gosec // G304: CLI tool opens user-specified files
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error opening file %s: %v\n", filename, err)
 				continue
@@ -333,12 +333,12 @@ func processAllInputs(ctx *ProcessingContext, splitWriter *SplitWriter) (totalGa
 			outputGames += out
 			duplicates += dup
 
-			file.Close()
+			file.Close() //nolint:errcheck,gosec // G104: cleanup on exit
 		}
 	}
 
 	if splitWriter != nil {
-		splitWriter.Close()
+		splitWriter.Close() //nolint:errcheck,gosec // G104: cleanup on exit
 	}
 
 	return totalGames, outputGames, duplicates

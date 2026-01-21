@@ -15,8 +15,8 @@ var (
 	noTags       = flag.Bool("notags", false, "Don't output any tags")
 	lineLength   = flag.Int("w", 80, "Maximum line length")
 	outputFormat = flag.String("W", "", "Output format: san, lalg, halg, elalg, uci, epd, fen")
-	jsonOutput = flag.Bool("J", false, "Output in JSON format")
-	splitGames = flag.Int("#", 0, "Split output into files of N games each")
+	jsonOutput   = flag.Bool("J", false, "Output in JSON format")
+	splitGames   = flag.Int("#", 0, "Split output into files of N games each")
 
 	// Content options
 	noComments   = flag.Bool("C", false, "Don't output comments")

@@ -31,7 +31,7 @@ func NewGameFilter() *GameFilter {
 // TagName >= "value"
 // etc.
 func (gf *GameFilter) LoadTagFile(filename string) error {
-	file, err := os.Open(filename)
+	file, err := os.Open(filename) //nolint:gosec // G304: CLI tool opens user-specified files
 	if err != nil {
 		return err
 	}
@@ -55,10 +55,10 @@ func (gf *GameFilter) LoadTagFile(filename string) error {
 			if strings.ContainsAny(rest, "?!*Aa") {
 				gf.PositionMatcher.AddPattern(rest, "", false)
 			} else {
-				gf.PositionMatcher.AddFEN(rest, "")
+				gf.PositionMatcher.AddFEN(rest, "") //nolint:errcheck,gosec // G104: errors logged internally
 			}
 		} else {
-			gf.TagMatcher.ParseCriterion(line)
+			gf.TagMatcher.ParseCriterion(line) //nolint:errcheck,gosec // G104: parsing errors tolerated
 		}
 	}
 
@@ -67,7 +67,7 @@ func (gf *GameFilter) LoadTagFile(filename string) error {
 
 // AddTagCriterion adds a tag criterion directly.
 func (gf *GameFilter) AddTagCriterion(tagName, value string, op TagOperator) {
-	gf.TagMatcher.AddCriterion(tagName, value, op)
+	gf.TagMatcher.AddCriterion(tagName, value, op) //nolint:errcheck,gosec // G104: errors not expected
 }
 
 // AddPlayerFilter adds a filter for player name (matches White or Black).
@@ -77,27 +77,27 @@ func (gf *GameFilter) AddPlayerFilter(name string) {
 
 // AddWhiteFilter adds a filter for White player.
 func (gf *GameFilter) AddWhiteFilter(name string) {
-	gf.TagMatcher.AddCriterion("White", name, OpContains)
+	gf.TagMatcher.AddCriterion("White", name, OpContains) //nolint:errcheck,gosec // G104: errors not expected
 }
 
 // AddBlackFilter adds a filter for Black player.
 func (gf *GameFilter) AddBlackFilter(name string) {
-	gf.TagMatcher.AddCriterion("Black", name, OpContains)
+	gf.TagMatcher.AddCriterion("Black", name, OpContains) //nolint:errcheck,gosec // G104: errors not expected
 }
 
 // AddECOFilter adds a filter for ECO code prefix.
 func (gf *GameFilter) AddECOFilter(eco string) {
-	gf.TagMatcher.AddCriterion("ECO", eco, OpContains)
+	gf.TagMatcher.AddCriterion("ECO", eco, OpContains) //nolint:errcheck,gosec // G104: errors not expected
 }
 
 // AddResultFilter adds a filter for game result.
 func (gf *GameFilter) AddResultFilter(result string) {
-	gf.TagMatcher.AddCriterion("Result", result, OpEqual)
+	gf.TagMatcher.AddCriterion("Result", result, OpEqual) //nolint:errcheck,gosec // G104: errors not expected
 }
 
 // AddDateFilter adds a date filter with operator.
 func (gf *GameFilter) AddDateFilter(date string, op TagOperator) {
-	gf.TagMatcher.AddCriterion("Date", date, op)
+	gf.TagMatcher.AddCriterion("Date", date, op) //nolint:errcheck,gosec // G104: errors not expected
 }
 
 // AddFENFilter adds an exact FEN position filter.

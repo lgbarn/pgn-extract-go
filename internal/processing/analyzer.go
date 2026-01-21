@@ -122,7 +122,7 @@ func ValidateGame(game *chess.Game) *ValidationResult {
 			return result
 		}
 	} else {
-		board, _ = engine.NewBoardFromFEN(engine.InitialFEN)
+		board, _ = engine.NewBoardFromFEN(engine.InitialFEN) //nolint:errcheck // InitialFEN is known valid
 	}
 
 	plyCount := 0

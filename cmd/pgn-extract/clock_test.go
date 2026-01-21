@@ -12,7 +12,7 @@ func createTempPGN(t *testing.T, filename, content string) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, filename)
-	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil { //nolint:gosec // G306: test file permissions
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	return tmpFile

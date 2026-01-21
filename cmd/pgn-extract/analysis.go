@@ -10,8 +10,10 @@ import (
 	"github.com/lgbarn/pgn-extract-go/internal/processing"
 )
 
-// Type aliases for backward compatibility
+// GameAnalysis is a type alias for backward compatibility.
 type GameAnalysis = processing.GameAnalysis
+
+// ValidationResult is a type alias for backward compatibility.
 type ValidationResult = processing.ValidationResult
 
 // analyzeGame replays a game and analyzes it for various features.

@@ -132,7 +132,7 @@ func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
 	// Start with initial position or FEN
 	var board *chess.Board
 	if fen := game.GetTag("FEN"); fen != "" {
-		board, _ = engine.NewBoardFromFEN(fen)
+		board, _ = engine.NewBoardFromFEN(fen) //nolint:errcheck // nil check below handles error
 	}
 	if board == nil {
 		board = engine.NewInitialBoard()

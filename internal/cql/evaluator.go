@@ -170,7 +170,7 @@ type square struct {
 func (e *Evaluator) parseSquareSet(desig string) []square {
 	if desig == "." {
 		// All squares
-		var squares []square
+		squares := make([]square, 0, 64)
 		for rank := chess.Rank(0); rank < 8; rank++ {
 			for col := chess.Col(0); col < 8; col++ {
 				squares = append(squares, square{col, rank})

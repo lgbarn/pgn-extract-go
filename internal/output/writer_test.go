@@ -135,7 +135,7 @@ func TestJSONWriter_Close(t *testing.T) {
 	cfg := config.NewConfig()
 
 	writer := NewJSONWriter(&buf, cfg)
-	writer.WriteGame(game)
+	writer.WriteGame(game) //nolint:gosec // G104: test code
 	err := writer.Close()
 	if err != nil {
 		t.Errorf("Close failed: %v", err)
