@@ -94,6 +94,12 @@ type Config struct {
 	AllowNullMoves      bool
 	AllowNestedComments bool
 
+	// Chess960 support
+	Chess960Mode bool
+
+	// Fuzzy duplicate detection depth
+	FuzzyDepth int
+
 	// Split options
 	SplitVariants   bool
 	SplitDepthLimit uint

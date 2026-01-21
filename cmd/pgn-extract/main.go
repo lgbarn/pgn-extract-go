@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
@@ -20,6 +21,20 @@ const programVersion = "0.1.0"
 
 func main() {
 	flag.Usage = usage
+
+	// First pass: check for -A flag to load arguments file
+	// We need to do a quick scan of os.Args to find -A before full parsing
+	argsFromFile := loadArgsFromFileIfSpecified()
+	if len(argsFromFile) > 0 {
+		// Prepend file args to os.Args (after program name, before user args)
+		// This allows user args to override file args
+		newArgs := make([]string, 0, 1+len(argsFromFile)+len(os.Args)-1)
+		newArgs = append(newArgs, os.Args[0])
+		newArgs = append(newArgs, argsFromFile...)
+		newArgs = append(newArgs, os.Args[1:]...)
+		os.Args = newArgs
+	}
+
 	flag.Parse()
 
 	if *help {
@@ -34,6 +49,9 @@ func main() {
 
 	cfg := config.NewConfig()
 	applyFlags(cfg)
+
+	// Initialize selection sets for selectOnly/skipMatching flags
+	initSelectionSets()
 
 	// Set up logging and output files
 	setupLogFile(cfg)
@@ -71,19 +89,37 @@ func main() {
 		if *outputFile != "" {
 			base = strings.TrimSuffix(*outputFile, filepath.Ext(*outputFile))
 		}
-		splitWriter = NewSplitWriter(base, *splitGames)
+		splitWriter = NewSplitWriterWithPattern(base, *splitGames, *splitPattern)
 		cfg.OutputFile = splitWriter
+	}
+
+	// Set up ECO-based output splitting
+	var ecoSplitWriter *ECOSplitWriter
+	if *ecoSplit > 0 && *ecoSplit <= 3 {
+		base := "output"
+		if *outputFile != "" {
+			base = strings.TrimSuffix(*outputFile, filepath.Ext(*outputFile))
+		}
+		ecoSplitWriter = NewECOSplitWriter(base, *ecoSplit, cfg)
+	}
+
+	// Set up same-setup duplicate detection
+	var setupDetector *hashing.SetupDuplicateDetector
+	if *deleteSameSetup {
+		setupDetector = hashing.NewSetupDuplicateDetector()
 	}
 
 	// Create processing context
 	ctx := &ProcessingContext{
 		cfg:              cfg,
 		detector:         detector,
+		setupDetector:    setupDetector,
 		ecoClassifier:    ecoClassifier,
 		gameFilter:       gameFilter,
 		cqlNode:          cqlNode,
 		variationMatcher: variationMatcher,
 		materialMatcher:  materialMatcher,
+		ecoSplitWriter:   ecoSplitWriter,
 	}
 
 	// Process input files or stdin
@@ -253,6 +289,11 @@ func loadVariationMatcher() *matching.VariationMatcher {
 
 	matcher := matching.NewVariationMatcher()
 
+	// Set matchAnywhere option if specified
+	if *varAnywhere {
+		matcher.SetMatchAnywhere(true)
+	}
+
 	if *variationFile != "" {
 		if err := matcher.LoadFromFile(*variationFile); err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading variation file %s: %v\n", *variationFile, err)
@@ -311,6 +352,17 @@ func parseCQLQuery() cql.Node {
 func processAllInputs(ctx *ProcessingContext, splitWriter *SplitWriter) (totalGames, outputGames, duplicates int) {
 	args := flag.Args()
 
+	// If -f flag is specified, load file list from file
+	if *fileListFile != "" {
+		fileList, err := loadFileList(*fileListFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading file list %s: %v\n", *fileListFile, err)
+			os.Exit(1)
+		}
+		// Append file list to command-line args
+		args = append(args, fileList...)
+	}
+
 	if len(args) == 0 {
 		games := processInput(os.Stdin, "stdin", ctx.cfg)
 		totalGames = len(games)
@@ -341,6 +393,11 @@ func processAllInputs(ctx *ProcessingContext, splitWriter *SplitWriter) (totalGa
 		splitWriter.Close() //nolint:errcheck,gosec // G104: cleanup on exit
 	}
 
+	// Close ECO split writer if used
+	if ctx.ecoSplitWriter != nil {
+		ctx.ecoSplitWriter.Close() //nolint:errcheck,gosec // G104: cleanup on exit
+	}
+
 	return totalGames, outputGames, duplicates
 }
 
@@ -366,4 +423,123 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "  uci    UCI format\n")
 	fmt.Fprintf(os.Stderr, "  epd    Extended Position Description\n")
 	fmt.Fprintf(os.Stderr, "  fen    FEN sequence\n")
+}
+
+// loadArgsFile reads command-line arguments from a file.
+// Lines starting with # are treated as comments and ignored.
+// Empty lines are also ignored.
+func loadArgsFile(filename string) ([]string, error) {
+	file, err := os.Open(filename) //nolint:gosec // G304: CLI tool opens user-specified files
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var args []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// Split line into individual arguments (handles quoted strings)
+		lineArgs := splitArgsLine(line)
+		args = append(args, lineArgs...)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return args, nil
+}
+
+// splitArgsLine splits a line into individual arguments, respecting quotes.
+func splitArgsLine(line string) []string {
+	var args []string
+	var current strings.Builder
+	inQuote := false
+	quoteChar := rune(0)
+
+	for _, r := range line {
+		switch {
+		case !inQuote && (r == '"' || r == '\''):
+			inQuote = true
+			quoteChar = r
+		case inQuote && r == quoteChar:
+			inQuote = false
+			quoteChar = 0
+		case !inQuote && (r == ' ' || r == '\t'):
+			if current.Len() > 0 {
+				args = append(args, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteRune(r)
+		}
+	}
+
+	if current.Len() > 0 {
+		args = append(args, current.String())
+	}
+
+	return args
+}
+
+// loadFileList reads a list of PGN file paths from a file.
+// Returns the list of file paths, skipping empty lines.
+func loadFileList(filename string) ([]string, error) {
+	file, err := os.Open(filename) //nolint:gosec // G304: CLI tool opens user-specified files
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var files []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		files = append(files, line)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
+// loadArgsFromFileIfSpecified scans os.Args for -A flag and loads args from file if found.
+// This must happen before flag.Parse() to inject file arguments.
+func loadArgsFromFileIfSpecified() []string {
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		var filename string
+
+		switch {
+		case arg == "-A" && i+1 < len(os.Args):
+			filename = os.Args[i+1]
+		case strings.HasPrefix(arg, "-A="):
+			filename = strings.TrimPrefix(arg, "-A=")
+		default:
+			continue
+		}
+
+		if filename == "" {
+			continue
+		}
+
+		args, err := loadArgsFile(filename)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading arguments file %s: %v\n", filename, err)
+			os.Exit(1)
+		}
+		return args
+	}
+	return nil
 }

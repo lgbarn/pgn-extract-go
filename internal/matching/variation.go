@@ -16,6 +16,8 @@ type VariationMatcher struct {
 	moveSequences [][]string
 	// Positional variations (FEN positions to match in sequence)
 	positionSequences [][]string
+	// If true, match patterns anywhere in the game (not just from the beginning)
+	matchAnywhere bool
 }
 
 // NewVariationMatcher creates a new variation matcher.
@@ -213,6 +215,11 @@ func matchesFENPosition(board *chess.Board, fen string) bool {
 // HasCriteria returns true if any matching criteria are set.
 func (vm *VariationMatcher) HasCriteria() bool {
 	return len(vm.moveSequences) > 0 || len(vm.positionSequences) > 0
+}
+
+// SetMatchAnywhere enables matching patterns anywhere in the game.
+func (vm *VariationMatcher) SetMatchAnywhere(anywhere bool) {
+	vm.matchAnywhere = anywhere
 }
 
 // Match implements GameMatcher interface.
