@@ -66,39 +66,45 @@ const sampleECOData = `[ECO "C00"]
 1. g4 *
 `
 
-// Test games
-const ruyLopezGame = `[Event "Test"]
+var benchGames = map[string]string{
+	"RuyLopez": `[Event "Test"]
 [White "A"]
 [Black "B"]
 [Result "*"]
 
 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6
 8. c3 O-O 9. h3 Nb8 10. d4 Nbd7 *
-`
-
-const sicilianGame = `[Event "Test"]
+`,
+	"Sicilian": `[Event "Test"]
 [White "A"]
 [Black "B"]
 [Result "*"]
 
 1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 *
-`
-
-const frenchGame = `[Event "Test"]
+`,
+	"French": `[Event "Test"]
 [White "A"]
 [Black "B"]
 [Result "*"]
 
 1. e4 e6 2. d4 d5 3. Nc3 Bb4 4. e5 c5 5. a3 Bxc3+ 6. bxc3 *
-`
+`,
+	"NoMatch": `[Event "Test"]
+[White "A"]
+[Black "B"]
+[Result "*"]
 
-func getECOClassifier() *ECOClassifier {
+1. a3 a6 2. b3 b6 3. c3 c6 4. d3 d6 *
+`,
+}
+
+func newECOClassifier() *ECOClassifier {
 	ec := NewECOClassifier()
 	ec.LoadFromReader(strings.NewReader(sampleECOData))
 	return ec
 }
 
-func parseGame(pgn string) *chess.Game {
+func parseBenchGame(pgn string) *chess.Game {
 	cfg := config.NewConfig()
 	cfg.Verbosity = 0
 	p := parser.NewParser(strings.NewReader(pgn), cfg)
@@ -106,93 +112,54 @@ func parseGame(pgn string) *chess.Game {
 	return game
 }
 
-// Benchmark ECO classification
-func BenchmarkECOClassifier_ClassifyGame_RuyLopez(b *testing.B) {
-	ec := getECOClassifier()
-	game := parseGame(ruyLopezGame)
+func BenchmarkECOClassifier_ClassifyGame(b *testing.B) {
+	ec := newECOClassifier()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		ec.ClassifyGame(game)
+	for name, pgn := range benchGames {
+		game := parseBenchGame(pgn)
+		b.Run(name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				ec.ClassifyGame(game)
+			}
+		})
 	}
 }
 
-func BenchmarkECOClassifier_ClassifyGame_Sicilian(b *testing.B) {
-	ec := getECOClassifier()
-	game := parseGame(sicilianGame)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		ec.ClassifyGame(game)
-	}
-}
-
-func BenchmarkECOClassifier_ClassifyGame_French(b *testing.B) {
-	ec := getECOClassifier()
-	game := parseGame(frenchGame)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		ec.ClassifyGame(game)
-	}
-}
-
-func BenchmarkECOClassifier_ClassifyGame_NoMatch(b *testing.B) {
-	ec := getECOClassifier()
-	// A game with an unusual opening that won't match
-	unusualGame := parseGame(`[Event "Test"]
-[White "A"]
-[Black "B"]
-[Result "*"]
-
-1. a3 a6 2. b3 b6 3. c3 c6 4. d3 d6 *
-`)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		ec.ClassifyGame(unusualGame)
-	}
-}
-
-// Benchmark ECO loading
 func BenchmarkECOClassifier_LoadFromReader(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		ec := NewECOClassifier()
-		ec.LoadFromReader(strings.NewReader(sampleECOData))
-	}
-}
-
-// Benchmark with larger ECO data
-func BenchmarkECOClassifier_LoadFromReader_Large(b *testing.B) {
-	// Create larger ECO data by duplicating with different codes
-	var sb strings.Builder
-	codes := []string{"A", "B", "C", "D", "E"}
-	for _, code := range codes {
-		for i := 0; i < 20; i++ {
-			sb.WriteString("[ECO \"")
-			sb.WriteString(code)
-			sb.WriteString("\"]\n")
-			sb.WriteString("[Opening \"Test Opening\"]\n\n")
-			sb.WriteString("1. e4 e5 2. Nf3 *\n\n")
+	b.Run("Standard", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			ec := NewECOClassifier()
+			ec.LoadFromReader(strings.NewReader(sampleECOData))
 		}
-	}
-	largeData := sb.String()
+	})
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		ec := NewECOClassifier()
-		ec.LoadFromReader(strings.NewReader(largeData))
-	}
+	b.Run("Large", func(b *testing.B) {
+		var sb strings.Builder
+		for _, code := range []string{"A", "B", "C", "D", "E"} {
+			for i := 0; i < 20; i++ {
+				sb.WriteString("[ECO \"")
+				sb.WriteString(code)
+				sb.WriteString("\"]\n")
+				sb.WriteString("[Opening \"Test Opening\"]\n\n")
+				sb.WriteString("1. e4 e5 2. Nf3 *\n\n")
+			}
+		}
+		largeData := sb.String()
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			ec := NewECOClassifier()
+			ec.LoadFromReader(strings.NewReader(largeData))
+		}
+	})
 }
 
-// Benchmark AddECOTags
 func BenchmarkECOClassifier_AddECOTags(b *testing.B) {
-	ec := getECOClassifier()
-	game := parseGame(ruyLopezGame)
+	ec := newECOClassifier()
+	game := parseBenchGame(benchGames["RuyLopez"])
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// Reset game tags
 		delete(game.Tags, "ECO")
 		delete(game.Tags, "Opening")
 		delete(game.Tags, "Variation")
@@ -200,12 +167,8 @@ func BenchmarkECOClassifier_AddECOTags(b *testing.B) {
 	}
 }
 
-// Benchmark hash table lookup
 func BenchmarkECOClassifier_findMatch(b *testing.B) {
-	ec := getECOClassifier()
-
-	// Use a known hash that exists in the table
-	// This is approximate - in real code you'd use actual hash values
+	ec := newECOClassifier()
 	var posHash uint64 = 0x12345678
 	var cumHash uint64 = 0x87654321
 	halfMoves := 6

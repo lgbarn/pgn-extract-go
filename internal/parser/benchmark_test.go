@@ -76,162 +76,93 @@ const (
 `
 )
 
-// Parser benchmarks
-func BenchmarkParser_ParseGame_Simple(b *testing.B) {
+func newSilentConfig() *config.Config {
 	cfg := config.NewConfig()
 	cfg.Verbosity = 0
+	return cfg
+}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		p := NewParser(strings.NewReader(simplePGN), cfg)
-		p.ParseGame()
+func BenchmarkParser_ParseGame(b *testing.B) {
+	cases := map[string]string{
+		"Simple":         simplePGN,
+		"Short":          shortPGN,
+		"Annotated":      annotatedPGN,
+		"WithVariations": variationsPGN,
+	}
+
+	cfg := newSilentConfig()
+	for name, pgn := range cases {
+		b.Run(name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				p := NewParser(strings.NewReader(pgn), cfg)
+				p.ParseGame()
+			}
+		})
 	}
 }
 
-func BenchmarkParser_ParseGame_Short(b *testing.B) {
-	cfg := config.NewConfig()
-	cfg.Verbosity = 0
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		p := NewParser(strings.NewReader(shortPGN), cfg)
-		p.ParseGame()
-	}
-}
-
-func BenchmarkParser_ParseGame_Annotated(b *testing.B) {
-	cfg := config.NewConfig()
-	cfg.Verbosity = 0
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		p := NewParser(strings.NewReader(annotatedPGN), cfg)
-		p.ParseGame()
-	}
-}
-
-func BenchmarkParser_ParseGame_WithVariations(b *testing.B) {
-	cfg := config.NewConfig()
-	cfg.Verbosity = 0
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		p := NewParser(strings.NewReader(variationsPGN), cfg)
-		p.ParseGame()
-	}
-}
-
-func BenchmarkParser_ParseAllGames_Multiple(b *testing.B) {
-	cfg := config.NewConfig()
-	cfg.Verbosity = 0
-
-	b.ResetTimer()
+func BenchmarkParser_ParseAllGames(b *testing.B) {
+	cfg := newSilentConfig()
 	for i := 0; i < b.N; i++ {
 		p := NewParser(strings.NewReader(multiplePGN), cfg)
 		p.ParseAllGames()
 	}
 }
 
-// Lexer benchmarks
-func BenchmarkLexer_NextToken_Simple(b *testing.B) {
-	cfg := config.NewConfig()
-	cfg.Verbosity = 0
+func BenchmarkLexer_NextToken(b *testing.B) {
+	cases := map[string]string{
+		"Simple":    simplePGN,
+		"Annotated": annotatedPGN,
+	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		lexer := NewLexer(strings.NewReader(simplePGN), cfg)
-		b.StartTimer()
+	cfg := newSilentConfig()
+	for name, pgn := range cases {
+		b.Run(name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				lexer := NewLexer(strings.NewReader(pgn), cfg)
+				b.StartTimer()
 
-		for {
-			tok := lexer.NextToken()
-			if tok.Type == EOFToken {
-				break
+				for {
+					tok := lexer.NextToken()
+					if tok.Type == EOFToken {
+						break
+					}
+				}
 			}
-		}
+		})
 	}
 }
 
-func BenchmarkLexer_NextToken_Annotated(b *testing.B) {
-	cfg := config.NewConfig()
-	cfg.Verbosity = 0
+func BenchmarkDecodeMove(b *testing.B) {
+	moves := map[string]string{
+		"Pawn":           "e4",
+		"Piece":          "Nf3",
+		"Capture":        "Bxf7",
+		"Promotion":      "e8=Q",
+		"Castle":         "O-O",
+		"FullyQualified": "Qd1d4",
+		"WithCheck":      "Qf7+",
+		"WithMate":       "Qf7#",
+	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		lexer := NewLexer(strings.NewReader(annotatedPGN), cfg)
-		b.StartTimer()
-
-		for {
-			tok := lexer.NextToken()
-			if tok.Type == EOFToken {
-				break
+	for name, move := range moves {
+		b.Run(name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				DecodeMove(move)
 			}
-		}
+		})
 	}
 }
 
-// Move decoding benchmarks
-func BenchmarkDecodeMove_Pawn(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		DecodeMove("e4")
-	}
-}
-
-func BenchmarkDecodeMove_Piece(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		DecodeMove("Nf3")
-	}
-}
-
-func BenchmarkDecodeMove_Capture(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		DecodeMove("Bxf7")
-	}
-}
-
-func BenchmarkDecodeMove_Promotion(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		DecodeMove("e8=Q")
-	}
-}
-
-func BenchmarkDecodeMove_Castle(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		DecodeMove("O-O")
-	}
-}
-
-func BenchmarkDecodeMove_FullyQualified(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		DecodeMove("Qd1d4")
-	}
-}
-
-func BenchmarkDecodeMove_WithCheck(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		DecodeMove("Qf7+")
-	}
-}
-
-func BenchmarkDecodeMove_WithMate(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		DecodeMove("Qf7#")
-	}
-}
-
-// Large input benchmark
 func BenchmarkParser_LargeInput(b *testing.B) {
-	// Create a large PGN with many games
 	var sb strings.Builder
 	for i := 0; i < 100; i++ {
 		sb.WriteString(simplePGN)
 		sb.WriteString("\n")
 	}
 	largePGN := sb.String()
-
-	cfg := config.NewConfig()
-	cfg.Verbosity = 0
+	cfg := newSilentConfig()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
