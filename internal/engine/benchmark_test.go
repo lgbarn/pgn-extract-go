@@ -83,13 +83,13 @@ func BenchmarkApplyMove(b *testing.B) {
 		},
 	}
 
-	for _, tc := range cases {
-		b.Run(tc.name, func(b *testing.B) {
-			board, _ := NewBoardFromFEN(tc.fen)
+	for _, tt := range cases {
+		b.Run(tt.name, func(b *testing.B) {
+			board, _ := NewBoardFromFEN(tt.fen)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				boardCopy := board.Copy()
-				ApplyMove(boardCopy, tc.move)
+				ApplyMove(boardCopy, tt.move)
 			}
 		})
 	}

@@ -33,26 +33,35 @@ func withOutputFile(cfg *config.Config, w io.Writer, fn func()) {
 type ProcessingContext struct {
 	cfg              *config.Config
 	detector         *hashing.DuplicateDetector
+	setupDetector    *hashing.SetupDuplicateDetector
 	ecoClassifier    *eco.ECOClassifier
 	gameFilter       *matching.GameFilter
 	cqlNode          cql.Node
 	variationMatcher *matching.VariationMatcher
 	materialMatcher  *matching.MaterialMatcher
+	ecoSplitWriter   *ECOSplitWriter
 }
 
 // SplitWriter handles writing to multiple output files
 type SplitWriter struct {
 	baseName     string
+	pattern      string // filename pattern with %s for base and %d for number
 	gamesPerFile int
 	currentFile  *os.File
 	fileNumber   int
 	gameCount    int
 }
 
-// NewSplitWriter creates a new split writer
+// NewSplitWriter creates a new split writer with default pattern
 func NewSplitWriter(baseName string, gamesPerFile int) *SplitWriter {
+	return NewSplitWriterWithPattern(baseName, gamesPerFile, "%s_%d.pgn")
+}
+
+// NewSplitWriterWithPattern creates a new split writer with a custom filename pattern
+func NewSplitWriterWithPattern(baseName string, gamesPerFile int, pattern string) *SplitWriter {
 	return &SplitWriter{
 		baseName:     baseName,
+		pattern:      pattern,
 		gamesPerFile: gamesPerFile,
 		fileNumber:   1,
 	}
@@ -65,7 +74,7 @@ func (sw *SplitWriter) Write(p []byte) (n int, err error) {
 			sw.currentFile.Close() //nolint:errcheck,gosec // G104: cleanup before creating new file
 			sw.fileNumber++
 		}
-		filename := fmt.Sprintf("%s_%d.pgn", sw.baseName, sw.fileNumber)
+		filename := fmt.Sprintf(sw.pattern, sw.baseName, sw.fileNumber)
 		sw.currentFile, err = os.Create(filename) //nolint:gosec // G304: filename is derived from user-specified base name
 		if err != nil {
 			return 0, err
@@ -86,6 +95,101 @@ func (sw *SplitWriter) Close() error {
 		return sw.currentFile.Close()
 	}
 	return nil
+}
+
+// ECOSplitWriter writes games to different files based on ECO code.
+type ECOSplitWriter struct {
+	baseName string
+	level    int // 1=A-E, 2=A0-E9, 3=A00-E99
+	files    map[string]*os.File
+	cfg      *config.Config
+}
+
+// NewECOSplitWriter creates a new ECO-based split writer.
+func NewECOSplitWriter(baseName string, level int, cfg *config.Config) *ECOSplitWriter {
+	return &ECOSplitWriter{
+		baseName: baseName,
+		level:    level,
+		files:    make(map[string]*os.File),
+		cfg:      cfg,
+	}
+}
+
+// WriteGame writes a game to the appropriate ECO-based file.
+func (ew *ECOSplitWriter) WriteGame(game *chess.Game) error {
+	ecoCode := ew.getECOPrefix(game)
+	file, err := ew.getOrCreateFile(ecoCode)
+	if err != nil {
+		return err
+	}
+
+	// Temporarily redirect output to this file
+	originalOutput := ew.cfg.OutputFile
+	ew.cfg.OutputFile = file
+	output.OutputGame(game, ew.cfg)
+	ew.cfg.OutputFile = originalOutput
+
+	return nil
+}
+
+// getECOPrefix extracts the ECO prefix based on the configured level.
+func (ew *ECOSplitWriter) getECOPrefix(game *chess.Game) string {
+	eco := game.ECO()
+	if eco == "" {
+		return "unknown"
+	}
+
+	switch ew.level {
+	case 1:
+		// Just the letter: A, B, C, D, E
+		if len(eco) >= 1 {
+			return string(eco[0])
+		}
+	case 2:
+		// Letter + first digit: A0, A1, ..., E9
+		if len(eco) >= 2 {
+			return eco[:2]
+		}
+	case 3:
+		// Full code: A00, A01, ..., E99
+		if len(eco) >= 3 {
+			return eco[:3]
+		}
+	}
+
+	return eco
+}
+
+// getOrCreateFile gets an existing file or creates a new one for the given ECO prefix.
+func (ew *ECOSplitWriter) getOrCreateFile(ecoPrefix string) (*os.File, error) {
+	if file, ok := ew.files[ecoPrefix]; ok {
+		return file, nil
+	}
+
+	filename := fmt.Sprintf("%s_%s.pgn", ew.baseName, ecoPrefix)
+	file, err := os.Create(filename) //nolint:gosec // G304: filename is derived from user-specified base name
+	if err != nil {
+		return nil, err
+	}
+
+	ew.files[ecoPrefix] = file
+	return file, nil
+}
+
+// Close closes all open files.
+func (ew *ECOSplitWriter) Close() error {
+	var lastErr error
+	for _, file := range ew.files {
+		if err := file.Close(); err != nil {
+			lastErr = err
+		}
+	}
+	return lastErr
+}
+
+// FileCount returns the number of files created.
+func (ew *ECOSplitWriter) FileCount() int {
+	return len(ew.files)
 }
 
 // processInput parses games from a reader
@@ -130,6 +234,12 @@ func outputGamesSequential(games []*chess.Game, ctx *ProcessingContext) (int, in
 			break
 		}
 
+		// Track game position (1-indexed) and check if it should be processed
+		position := int(IncrementGamePosition())
+		if !checkGamePosition(position) {
+			continue
+		}
+
 		filterResult := applyFilters(game, ctx)
 
 		if filterResult.SkipOutput {
@@ -149,6 +259,9 @@ func outputGamesSequential(games []*chess.Game, ctx *ProcessingContext) (int, in
 			outputCount++
 			continue
 		}
+
+		// Apply move truncation before output
+		truncateMoves(game)
 
 		out, dup := handleGameOutput(game, filterResult.Board, filterResult.GameInfo, ctx, &jsonGames)
 		outputCount += out
@@ -179,7 +292,7 @@ func handleGameOutput(game *chess.Game, board *chess.Board, gameInfo *GameAnalys
 	detector := ctx.detector
 
 	if detector == nil {
-		outputGameWithAnnotations(game, cfg, gameInfo, jsonGames)
+		outputGameWithECOSplit(game, cfg, gameInfo, jsonGames, ctx.ecoSplitWriter)
 		atomic.AddInt64(&matchedCount, 1)
 		return 1, 0
 	}
@@ -193,7 +306,7 @@ func handleGameOutput(game *chess.Game, board *chess.Board, gameInfo *GameAnalys
 	if isDuplicate {
 		outputDuplicateGame(game, cfg)
 		if cfg.Duplicate.SuppressOriginals {
-			outputGameWithAnnotations(game, cfg, gameInfo, jsonGames)
+			outputGameWithECOSplit(game, cfg, gameInfo, jsonGames, ctx.ecoSplitWriter)
 			atomic.AddInt64(&matchedCount, 1)
 			return 1, 1
 		}
@@ -202,7 +315,7 @@ func handleGameOutput(game *chess.Game, board *chess.Board, gameInfo *GameAnalys
 
 	// Not a duplicate - output if not suppressing or if not outputting only duplicates
 	if shouldOutputUnique(cfg) {
-		outputGameWithAnnotations(game, cfg, gameInfo, jsonGames)
+		outputGameWithECOSplit(game, cfg, gameInfo, jsonGames, ctx.ecoSplitWriter)
 		atomic.AddInt64(&matchedCount, 1)
 		return 1, 0
 	}
@@ -251,6 +364,13 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 			if *stopAfter > 0 && atomic.LoadInt64(&matchedCount) >= int64(*stopAfter) {
 				break
 			}
+
+			// Track game position (1-indexed) and check if it should be processed
+			position := int(IncrementGamePosition())
+			if !checkGamePosition(position) {
+				continue
+			}
+
 			pool.Submit(worker.WorkItem{Game: game, Index: i})
 		}
 		pool.Close()
@@ -274,6 +394,9 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 			atomic.AddInt64(&outputCount, 1)
 			continue
 		}
+
+		// Apply move truncation before output
+		truncateMoves(result.Game)
 
 		gameInfo, _ := result.GameInfo.(*GameAnalysis) //nolint:errcheck // type assertion with ok
 		out, dup := handleGameOutput(result.Game, result.Board, gameInfo, ctx, &jsonGames)
@@ -309,8 +432,8 @@ func processGameWorker(item worker.WorkItem, ctx *ProcessingContext) worker.Proc
 	return result
 }
 
-// outputGameWithAnnotations outputs a game with optional annotations
-func outputGameWithAnnotations(game *chess.Game, cfg *config.Config, gameInfo *GameAnalysis, jsonGames *[]*chess.Game) {
+// outputGameWithECOSplit outputs a game with optional annotations and ECO-based splitting.
+func outputGameWithECOSplit(game *chess.Game, cfg *config.Config, gameInfo *GameAnalysis, jsonGames *[]*chess.Game, ecoWriter *ECOSplitWriter) {
 	// Handle split writer
 	if sw, ok := cfg.OutputFile.(*SplitWriter); ok {
 		defer sw.IncrementGameCount()
@@ -318,7 +441,16 @@ func outputGameWithAnnotations(game *chess.Game, cfg *config.Config, gameInfo *G
 
 	if cfg.Output.JSONFormat {
 		*jsonGames = append(*jsonGames, game)
-	} else {
-		output.OutputGame(game, cfg)
+		return
 	}
+
+	// If ECO split writer is configured, use it
+	if ecoWriter != nil {
+		if err := ecoWriter.WriteGame(game); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing game to ECO file: %v\n", err)
+		}
+		return
+	}
+
+	output.OutputGame(game, cfg)
 }
