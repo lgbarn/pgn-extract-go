@@ -15,9 +15,8 @@ var (
 	noTags       = flag.Bool("notags", false, "Don't output any tags")
 	lineLength   = flag.Int("w", 80, "Maximum line length")
 	outputFormat = flag.String("W", "", "Output format: san, lalg, halg, elalg, uci, epd, fen")
-	jsonOutput   = flag.Bool("J", false, "Output in JSON format")
-	splitGames   = flag.Int("#", 0, "Split output into files of N games each")
-	splitByECO   = flag.String("E", "", "Split output by ECO level (1-3)")
+	jsonOutput = flag.Bool("J", false, "Output in JSON format")
+	splitGames = flag.Int("#", 0, "Split output into files of N games each")
 
 	// Content options
 	noComments   = flag.Bool("C", false, "Don't output comments")
@@ -97,9 +96,6 @@ var (
 	logFile    = flag.String("l", "", "Write diagnostics to log file")
 	appendLog  = flag.String("L", "", "Append diagnostics to log file")
 	reportOnly = flag.Bool("r", false, "Report errors without extracting games")
-
-	// Polyglot hash
-	hashMatch = flag.String("H", "", "Match positions by polyglot hashcode")
 
 	// Other options
 	quiet   = flag.Bool("s", false, "Silent mode (no game count)")

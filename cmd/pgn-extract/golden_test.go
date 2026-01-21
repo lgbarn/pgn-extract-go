@@ -20,11 +20,6 @@ func inputFile(name string) string {
 	return filepath.Join(testdataDir(), "infiles", name)
 }
 
-// goldenFile returns the full path to a golden output file.
-func goldenFile(name string) string {
-	return filepath.Join(testdataDir(), "golden", name)
-}
-
 // testEcoFile returns the full path to the ECO file.
 func testEcoFile() string {
 	return filepath.Join(testdataDir(), "eco.pgn")
@@ -79,25 +74,9 @@ func runPgnExtract(t *testing.T, args ...string) (string, string) {
 	return stdout.String(), stderr.String()
 }
 
-// readGolden reads a golden file and returns its contents.
-func readGolden(t *testing.T, name string) string {
-	t.Helper()
-	content, err := os.ReadFile(goldenFile(name))
-	if err != nil {
-		t.Fatalf("Failed to read golden file %s: %v", name, err)
-	}
-	return string(content)
-}
-
 // countGames counts the number of games in PGN output.
 func countGames(pgn string) int {
 	return strings.Count(pgn, "[Event ")
-}
-
-// containsTag checks if output contains a specific tag.
-func containsTag(output, tagName, tagValue string) bool {
-	search := "[" + tagName + " \"" + tagValue + "\"]"
-	return strings.Contains(output, search)
 }
 
 // containsMove checks if output contains a specific move.

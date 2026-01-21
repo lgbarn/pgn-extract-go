@@ -94,7 +94,7 @@ func TestGameError_Unwrap(t *testing.T) {
 
 	// Unwrap should return the underlying error
 	unwrapped := errors.Unwrap(gameErr)
-	if unwrapped != ErrInvalidFEN {
+	if !errors.Is(unwrapped, ErrInvalidFEN) {
 		t.Errorf("Unwrap() = %v, want %v", unwrapped, ErrInvalidFEN)
 	}
 

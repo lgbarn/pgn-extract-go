@@ -1,0 +1,99 @@
+# GoReleaser configuration for pgn-extract-go
+# Docs: https://goreleaser.com/customization/
+
+version: 2
+
+project_name: pgn-extract
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: pgn-extract
+    main: ./cmd/pgn-extract
+    binary: pgn-extract
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.programVersion={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    files:
+      - README.md
+      - LICENSE*
+      - docs/*
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Performance
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Other
+      order: 999
+
+release:
+  github:
+    owner: lgbarn
+    name: pgn-extract-go
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
+
+# Homebrew formula (optional - uncomment if you want to publish to a tap)
+# brews:
+#   - repository:
+#       owner: lgbarn
+#       name: homebrew-tap
+#     homepage: https://github.com/lgbarn/pgn-extract-go
+#     description: A Go implementation of pgn-extract for manipulating chess PGN files
+#     license: MIT
+#     install: |
+#       bin.install "pgn-extract"
+#     test: |
+#       system "#{bin}/pgn-extract", "--version"

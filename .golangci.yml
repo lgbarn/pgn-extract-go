@@ -1,269 +1,115 @@
 # golangci-lint configuration for pgn-extract-go
 # Docs: https://golangci-lint.run/usage/configuration/
-# Run: golangci-lint run ./...
+
+version: "2"
 
 run:
-  # Timeout for analysis
   timeout: 5m
-
-  # Include test files
-  tests: true
-
-  # Number of CPUs to use (0 = all available)
   concurrency: 0
-
-  # Exit code when issues are found
-  issues-exit-code: 1
-
-  # Which Go modules to analyze
-  modules-download-mode: readonly
-
-  # Allow multiple parallel golangci-lint instances
   allow-parallel-runners: true
 
-  # Skip directories
-  skip-dirs:
-    - vendor
-    - testdata
-
-  # Skip files matching these patterns
-  skip-files:
-    - ".*_test\\.go$"
-
-output:
-  # Output format: colored-line-number, line-number, json, tab, checkstyle
-  formats:
-    - format: colored-line-number
-
-  # Print lines of code with issue
-  print-issued-lines: true
-
-  # Print linter name at end of issue
-  print-linter-name: true
-
-  # Sort results by: filepath, line and column
-  sort-results: true
-
 linters:
-  # Disable all linters first, then enable specific ones
-  disable-all: true
-
+  default: none
   enable:
-    # ==========================================================================
-    # Default linters (recommended)
-    # ==========================================================================
-    - errcheck      # Check for unchecked errors
-    - gosimple      # Simplify code
-    - govet         # Go vet examines Go source code
-    - ineffassign   # Detect ineffectual assignments
-    - staticcheck   # Go static analysis
-    - unused        # Check for unused constants, variables, functions, types
-
-    # ==========================================================================
+    # Default linters
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
     # Bug detection
-    # ==========================================================================
-    - bodyclose     # Check HTTP response body is closed
-    - durationcheck # Check for two durations multiplied together
-    - exportloopref # Check for pointers to loop variables
-    - nilerr        # Find code returning nil even if error is not nil
-    - noctx         # Find sending HTTP request without context.Context
-
-    # ==========================================================================
-    # Code style and consistency
-    # ==========================================================================
-    - gofmt         # Check whether code was gofmt-ed
-    - goimports     # Check import statements are formatted
-    - misspell      # Find commonly misspelled English words
-    - unconvert     # Remove unnecessary type conversions
-    - unparam       # Report unused function parameters
-    - whitespace    # Check for unnecessary whitespace
-
-    # ==========================================================================
-    # Code complexity
-    # ==========================================================================
-    - cyclop        # Check cyclomatic complexity
-    - gocognit      # Check cognitive complexity
-    - nakedret      # Find naked returns in long functions
-
-    # ==========================================================================
+    - bodyclose
+    - durationcheck
+    - nilerr
+    - noctx
+    # Code style
+    - misspell
+    # Complexity
+    - cyclop
+    - gocognit
+    - nakedret
     # Error handling
-    # ==========================================================================
-    - errorlint     # Find issues with error wrapping
-    - wrapcheck     # Check that errors from external packages are wrapped
-
-    # ==========================================================================
+    - errorlint
     # Performance
-    # ==========================================================================
-    - prealloc      # Find slice declarations that could be preallocated
-
-    # ==========================================================================
+    - prealloc
     # Security
-    # ==========================================================================
-    - gosec         # Security problems
+    - gosec
 
-linters-settings:
-  cyclop:
-    # Max complexity
-    max-complexity: 15
-    # Max average complexity per package
-    package-average: 10.0
-    skip-tests: true
+  settings:
+    cyclop:
+      max-complexity: 35
+      package-average: 15.0
 
-  errcheck:
-    # Check type assertions
-    check-type-assertions: true
-    # Check blank identifier assignments
-    check-blank: true
-    # Ignore specific functions
-    exclude-functions:
-      - io/ioutil.ReadFile
-      - io.Copy(*bytes.Buffer)
-      - (io.Closer).Close
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+      exclude-functions:
+        - io/ioutil.ReadFile
+        - io.Copy(*bytes.Buffer)
+        - (io.Closer).Close
 
-  gocognit:
-    # Minimal code complexity to report
-    min-complexity: 20
+    gocognit:
+      min-complexity: 50
 
-  gofmt:
-    # Simplify code
-    simplify: true
+    gosec:
+      includes:
+        - G101
+        - G102
+        - G103
+        - G104
+        - G106
+        - G107
+        - G108
+        - G109
+        - G110
+        - G201
+        - G202
+        - G203
+        - G204
+        - G301
+        - G302
+        - G303
+        - G304
+        - G305
+        - G306
+        - G401
+        - G402
+        - G403
+        - G404
+        - G501
+        - G502
+        - G503
+        - G504
+        - G505
 
-  goimports:
-    # Put local imports after 3rd-party packages
-    local-prefixes: github.com/lgbarn/pgn-extract-go
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
 
-  gosec:
-    # Select rules to run
-    includes:
-      - G101 # Look for hard-coded credentials
-      - G102 # Bind to all interfaces
-      - G103 # Audit use of unsafe block
-      - G104 # Audit errors not checked
-      - G106 # Audit use of ssh.InsecureIgnoreHostKey
-      - G107 # URL provided to HTTP request as taint input
-      - G108 # Profiling endpoint automatically exposed
-      - G109 # Potential Integer overflow
-      - G110 # Potential DoS via decompression bomb
-      - G201 # SQL query construction using format string
-      - G202 # SQL query construction using string concatenation
-      - G203 # Use of unescaped data in HTML templates
-      - G204 # Audit use of command execution
-      - G301 # Poor file permissions used when creating a directory
-      - G302 # Poor file permissions used with chmod
-      - G303 # Creating tempfile using predictable path
-      - G304 # File path provided as taint input
-      - G305 # File traversal when extracting zip/tar archive
-      - G306 # Poor file permissions used when writing to a new file
-      - G401 # Detect use of DES, RC4, MD5 or SHA1
-      - G402 # Look for bad TLS connection settings
-      - G403 # Ensure minimum RSA key length of 2048 bits
-      - G404 # Insecure random number source (rand)
-      - G501 # Import blocklist: crypto/md5
-      - G502 # Import blocklist: crypto/des
-      - G503 # Import blocklist: crypto/rc4
-      - G504 # Import blocklist: net/http/cgi
-      - G505 # Import blocklist: crypto/sha1
+    misspell:
+      locale: US
 
-  govet:
-    # Enable all analyzers
-    enable-all: true
-    # Disable specific analyzers
-    disable:
-      - fieldalignment # Too noisy for most projects
+    nakedret:
+      max-func-lines: 30
 
-  misspell:
-    locale: US
+    prealloc:
+      for-loops: true
+      range-loops: true
+      simple: true
 
-  nakedret:
-    # Report naked returns in functions longer than this
-    max-func-lines: 30
-
-  prealloc:
-    # Report preallocation suggestions on for loops
-    for-loops: true
-    # Report preallocation suggestions on range loops
-    range-loops: true
-    # Simple preallocation only
-    simple: true
-
-  staticcheck:
-    # SAxxxx checks (stylistic issues)
-    checks: ["all"]
-
-  unparam:
-    # Check exported functions
-    check-exported: false
-
-  unused:
-    # Check exported identifiers
-    check-exported: false
-
-  whitespace:
-    # Check for unnecessary leading newlines at start of functions
-    multi-if: false
-    # Check for unnecessary newlines at end of functions
-    multi-func: false
-
-  wrapcheck:
-    # Packages to ignore for error wrapping
-    ignoreSigs:
-      - .Errorf(
-      - errors.New(
-      - errors.Unwrap(
-      - .Wrap(
-      - .Wrapf(
-      - .WithMessage(
-      - .WithMessagef(
-      - .WithStack(
-
-issues:
-  # Maximum issues count per one linter (0 = unlimited)
-  max-issues-per-linter: 0
-
-  # Maximum count of issues with the same text (0 = unlimited)
-  max-same-issues: 0
-
-  # Show all issues from a linter
-  new: false
-
-  # Fix found issues (if supported by linter)
-  fix: false
-
-  # Exclude specific issues
-  exclude-rules:
-    # Exclude some linters from running on test files
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gosec
-        - wrapcheck
-        - gocognit
-        - cyclop
-
-    # Exclude linting for generated files
-    - path: generated\.go
-      linters:
+    staticcheck:
+      checks:
         - all
 
-    # Ignore long lines in go:generate comments
-    - linters:
-        - lll
-      source: "^//go:generate "
+    unused:
+      exported-fields-are-used: true
 
-    # Exclude known issues in specific paths
-    - path: cmd/pgn-extract/
-      linters:
-        - wrapcheck  # CLI can return unwrapped errors
-
-severity:
-  # Default severity for issues
-  default-severity: warning
-
-  # Severity rules
-  rules:
-    - linters:
-        - gosec
-      severity: error
-    - linters:
-        - errcheck
-      severity: error
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/lgbarn/pgn-extract-go

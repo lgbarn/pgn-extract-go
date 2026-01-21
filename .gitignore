@@ -2,6 +2,7 @@
 /pgn-extract
 /pgn-extract-go
 *.exe
+*.bin
 
 # Test binaries
 cmd/pgn-extract/pgn-extract-test

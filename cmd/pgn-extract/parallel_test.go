@@ -6,18 +6,6 @@ import (
 	"testing"
 )
 
-// extractGameEvents extracts Event tag values for comparison (order-independent).
-func extractGameEvents(pgn string) []string {
-	var events []string
-	lines := strings.Split(pgn, "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "[Event ") {
-			events = append(events, line)
-		}
-	}
-	return events
-}
-
 // extractGameResults extracts full game results (Event + Result) for comparison.
 func extractGameResults(pgn string) []string {
 	var results []string
