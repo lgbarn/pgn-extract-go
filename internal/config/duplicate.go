@@ -21,6 +21,10 @@ type DuplicateConfig struct {
 
 	// DuplicateFile is the output stream for duplicate games
 	DuplicateFile io.Writer
+
+	// MaxCapacity is the maximum number of hash table entries for duplicate detection
+	// 0 means unlimited capacity
+	MaxCapacity int
 }
 
 // NewDuplicateConfig creates a DuplicateConfig with default values.

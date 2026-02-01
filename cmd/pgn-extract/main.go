@@ -207,7 +207,7 @@ func setupDuplicateDetector(cfg *config.Config) hashing.DuplicateChecker {
 		defer file.Close()
 
 		// Load games into a temporary non-thread-safe detector
-		tempDetector := hashing.NewDuplicateDetector(false, 0)
+		tempDetector := hashing.NewDuplicateDetector(false, cfg.Duplicate.MaxCapacity)
 		checkGames := processInput(file, *checkFile, cfg)
 		for _, game := range checkGames {
 			board := replayGame(game)
@@ -219,13 +219,13 @@ func setupDuplicateDetector(cfg *config.Config) hashing.DuplicateChecker {
 		}
 
 		// Create thread-safe detector and load from temporary detector
-		detector := hashing.NewThreadSafeDuplicateDetector(false, 0)
+		detector := hashing.NewThreadSafeDuplicateDetector(false, cfg.Duplicate.MaxCapacity)
 		detector.LoadFromDetector(tempDetector)
 		return detector
 	}
 
 	// No check file - create empty thread-safe detector
-	return hashing.NewThreadSafeDuplicateDetector(false, 0)
+	return hashing.NewThreadSafeDuplicateDetector(false, cfg.Duplicate.MaxCapacity)
 }
 
 // loadECOClassifier loads the ECO classification file if specified.

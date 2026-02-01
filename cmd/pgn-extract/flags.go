@@ -30,6 +30,7 @@ var (
 	duplicateFile      = flag.String("d", "", "Output duplicates to this file")
 	outputDupsOnly     = flag.Bool("U", false, "Output only duplicates (suppress unique games)")
 	checkFile          = flag.String("c", "", "Check file for duplicate detection")
+	duplicateCapacity  = flag.Int("duplicate-capacity", 0, "Maximum duplicate hash table entries (0 = unlimited)")
 
 	// ECO classification
 	ecoFile = flag.String("e", "", "ECO classification file (PGN format)")
@@ -172,6 +173,7 @@ func applyFlags(cfg *config.Config) {
 	applyAnnotationFlags(cfg)
 	applyFilterFlags(cfg)
 	applyPhase4Flags(cfg)
+	applyDuplicateFlags(cfg)
 
 	if *quiet {
 		cfg.Verbosity = 0
@@ -261,4 +263,9 @@ func applyFilterFlags(cfg *config.Config) {
 	cfg.Filter.CheckRepetition = *repetitionFilter
 	cfg.Filter.MatchUnderpromotion = *underpromotionFilter
 	cfg.Filter.UseSoundex = *useSoundex
+}
+
+// applyDuplicateFlags configures duplicate detection settings.
+func applyDuplicateFlags(cfg *config.Config) {
+	cfg.Duplicate.MaxCapacity = *duplicateCapacity
 }
