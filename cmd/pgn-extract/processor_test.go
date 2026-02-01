@@ -1,16 +1,20 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
 	"github.com/lgbarn/pgn-extract-go/internal/config"
 	"github.com/lgbarn/pgn-extract-go/internal/hashing"
 	"github.com/lgbarn/pgn-extract-go/internal/testutil"
+	"github.com/lgbarn/pgn-extract-go/internal/worker"
 )
 
 // TestParallelDuplicateDetection_MatchesSequential verifies that parallel duplicate
@@ -518,6 +522,775 @@ func TestECOSplitWriter_LRU_HandleCountBounded(t *testing.T) {
 		if _, err := os.Stat(filename); os.IsNotExist(err) {
 			t.Errorf("File %s does not exist after Close()", filename)
 		}
+	}
+}
+
+// --- Helper: test PGN data ---
+
+const processorTestPGN = `[Event "Test"]
+[Site "Test"]
+[Date "2024.01.01"]
+[Round "1"]
+[White "Player1"]
+[Black "Player2"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0`
+
+const processorTestPGN2 = `[Event "Test2"]
+[Site "Test"]
+[Date "2024.01.02"]
+[Round "2"]
+[White "Player3"]
+[Black "Player4"]
+[Result "0-1"]
+
+1. d4 d5 2. c4 e6 0-1`
+
+const processorTestPGN3 = `[Event "Test3"]
+[Site "Test"]
+[Date "2024.01.03"]
+[Round "3"]
+[White "Player5"]
+[Black "Player6"]
+[Result "1/2-1/2"]
+
+1. Nf3 Nf6 2. g3 g6 1/2-1/2`
+
+const threeGamePGN = processorTestPGN + "\n\n" + processorTestPGN2 + "\n\n" + processorTestPGN3
+
+// resetGlobalState resets all global state modified by the processing pipeline.
+func resetGlobalState(t *testing.T) {
+	t.Helper()
+	atomic.StoreInt64(&matchedCount, 0)
+	atomic.StoreInt64(&gamePositionCounter, 0)
+	selectOnlySet = nil
+	skipMatchingSet = nil
+	parsedPlyRange = [2]int{0, 0}
+	parsedMoveRange = [2]int{0, 0}
+}
+
+// saveFlagPointers saves and returns a restore function for global flag pointers that tests modify.
+func saveFlagPointers(t *testing.T) func() {
+	t.Helper()
+	origStopAfter := *stopAfter
+	origSelectOnly := *selectOnly
+	origSkipMatching := *skipMatching
+	origWorkers := *workers
+	origReportOnly := *reportOnly
+	origQuiet := *quiet
+	origFixableMode := *fixableMode
+	origNegateMatch := *negateMatch
+	origCheckmateFilter := *checkmateFilter
+	origStalemateFilter := *stalemateFilter
+	origMinPly := *minPly
+	origMaxPly := *maxPly
+	origExactPly := *exactPly
+	origPlyRange := *plyRange
+	origMoveRange := *moveRange
+	origDropPly := *dropPly
+	origStartPly := *startPly
+	origPlyLimit := *plyLimit
+	origDropBefore := *dropBefore
+	origStrictMode := *strictMode
+	origValidateMode := *validateMode
+
+	return func() {
+		*stopAfter = origStopAfter
+		*selectOnly = origSelectOnly
+		*skipMatching = origSkipMatching
+		*workers = origWorkers
+		*reportOnly = origReportOnly
+		*quiet = origQuiet
+		*fixableMode = origFixableMode
+		*negateMatch = origNegateMatch
+		*checkmateFilter = origCheckmateFilter
+		*stalemateFilter = origStalemateFilter
+		*minPly = origMinPly
+		*maxPly = origMaxPly
+		*exactPly = origExactPly
+		*plyRange = origPlyRange
+		*moveRange = origMoveRange
+		*dropPly = origDropPly
+		*startPly = origStartPly
+		*plyLimit = origPlyLimit
+		*dropBefore = origDropBefore
+		*strictMode = origStrictMode
+		*validateMode = origValidateMode
+	}
+}
+
+// newTestContext creates a minimal ProcessingContext with config pointing at the given buffer.
+func newTestContext(buf *bytes.Buffer) *ProcessingContext {
+	cfg := config.NewConfig()
+	cfg.OutputFile = buf
+	cfg.Verbosity = 0
+	return &ProcessingContext{cfg: cfg}
+}
+
+// ============================================================
+// Task 1: SplitWriter, processInput, withOutputFile, output helpers
+// ============================================================
+
+func TestSplitWriterRotation(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseName := filepath.Join(tmpDir, "split")
+	sw := NewSplitWriter(baseName, 2) // 2 games per file
+	defer sw.Close()
+
+	// Write 3 "games" (just write bytes + increment)
+	for i := 0; i < 3; i++ {
+		_, err := sw.Write([]byte(fmt.Sprintf("[Event \"Game %d\"]\n\n1. e4 *\n\n", i+1)))
+		if err != nil {
+			t.Fatalf("Write failed on game %d: %v", i+1, err)
+		}
+		sw.IncrementGameCount()
+	}
+
+	if err := sw.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	// Expect file 1 (2 games) and file 2 (1 game)
+	file1 := fmt.Sprintf("%s_%d.pgn", baseName, 1)
+	file2 := fmt.Sprintf("%s_%d.pgn", baseName, 2)
+
+	if _, err := os.Stat(file1); os.IsNotExist(err) {
+		t.Errorf("Expected file %s to exist", file1)
+	}
+	if _, err := os.Stat(file2); os.IsNotExist(err) {
+		t.Errorf("Expected file %s to exist", file2)
+	}
+
+	// File 1 should have 2 events, file 2 should have 1
+	content1, _ := os.ReadFile(file1)
+	content2, _ := os.ReadFile(file2)
+	if count := strings.Count(string(content1), "[Event"); count != 2 {
+		t.Errorf("File 1 has %d events, want 2", count)
+	}
+	if count := strings.Count(string(content2), "[Event"); count != 1 {
+		t.Errorf("File 2 has %d events, want 1", count)
+	}
+}
+
+func TestSplitWriterCustomPattern(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseName := filepath.Join(tmpDir, "custom")
+	sw := NewSplitWriterWithPattern(baseName, 1, "%s-part%d.pgn")
+	defer sw.Close()
+
+	_, err := sw.Write([]byte("game data"))
+	if err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	sw.IncrementGameCount()
+	sw.Close()
+
+	expected := fmt.Sprintf("%s-part%d.pgn", baseName, 1)
+	if _, err := os.Stat(expected); os.IsNotExist(err) {
+		t.Errorf("Expected file %s to exist with custom pattern", expected)
+	}
+}
+
+func TestSplitWriterCloseNilFile(t *testing.T) {
+	sw := NewSplitWriter("/tmp/unused", 10)
+	// currentFile is nil since we never wrote
+	if err := sw.Close(); err != nil {
+		t.Errorf("Close on nil file returned error: %v", err)
+	}
+}
+
+func TestProcessInput(t *testing.T) {
+	cfg := config.NewConfig()
+	cfg.Verbosity = 0
+
+	t.Run("valid PGN", func(t *testing.T) {
+		r := strings.NewReader(processorTestPGN)
+		games := processInput(r, "test.pgn", cfg)
+		if len(games) != 1 {
+			t.Fatalf("Expected 1 game, got %d", len(games))
+		}
+		if games[0].GetTag("Event") != "Test" {
+			t.Errorf("Expected Event=Test, got %q", games[0].GetTag("Event"))
+		}
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		r := strings.NewReader("")
+		games := processInput(r, "empty.pgn", cfg)
+		if len(games) != 0 {
+			t.Errorf("Expected 0 games from empty input, got %d", len(games))
+		}
+	})
+
+	t.Run("multiple games", func(t *testing.T) {
+		r := strings.NewReader(threeGamePGN)
+		games := processInput(r, "multi.pgn", cfg)
+		if len(games) != 3 {
+			t.Fatalf("Expected 3 games, got %d", len(games))
+		}
+	})
+}
+
+func TestWithOutputFile(t *testing.T) {
+	cfg := config.NewConfig()
+	originalBuf := &bytes.Buffer{}
+	tempBuf := &bytes.Buffer{}
+	cfg.OutputFile = originalBuf
+
+	withOutputFile(cfg, tempBuf, func() {
+		if cfg.OutputFile != tempBuf {
+			t.Error("OutputFile not redirected inside fn")
+		}
+		fmt.Fprint(cfg.OutputFile, "hello")
+	})
+
+	if cfg.OutputFile != originalBuf {
+		t.Error("OutputFile not restored after withOutputFile")
+	}
+	if tempBuf.String() != "hello" {
+		t.Errorf("Expected 'hello' in temp buffer, got %q", tempBuf.String())
+	}
+	if originalBuf.Len() != 0 {
+		t.Errorf("Original buffer should be empty, got %q", originalBuf.String())
+	}
+}
+
+func TestOutputNonMatchingGame(t *testing.T) {
+	game := testutil.MustParseGame(t, processorTestPGN)
+
+	t.Run("with NonMatchingFile", func(t *testing.T) {
+		cfg := config.NewConfig()
+		nmBuf := &bytes.Buffer{}
+		cfg.NonMatchingFile = nmBuf
+		cfg.OutputFile = &bytes.Buffer{} // prevent writing to stdout
+
+		outputNonMatchingGame(game, cfg)
+
+		if nmBuf.Len() == 0 {
+			t.Error("Expected game written to NonMatchingFile")
+		}
+		if !strings.Contains(nmBuf.String(), "[Event") {
+			t.Error("NonMatchingFile output should contain game tags")
+		}
+	})
+
+	t.Run("with nil NonMatchingFile", func(t *testing.T) {
+		cfg := config.NewConfig()
+		cfg.NonMatchingFile = nil
+		cfg.OutputFile = &bytes.Buffer{}
+		// Should not panic
+		outputNonMatchingGame(game, cfg)
+	})
+}
+
+func TestOutputDuplicateGame(t *testing.T) {
+	game := testutil.MustParseGame(t, processorTestPGN)
+
+	t.Run("with DuplicateFile", func(t *testing.T) {
+		cfg := config.NewConfig()
+		dupBuf := &bytes.Buffer{}
+		cfg.Duplicate.DuplicateFile = dupBuf
+		cfg.OutputFile = &bytes.Buffer{}
+
+		outputDuplicateGame(game, cfg)
+
+		if dupBuf.Len() == 0 {
+			t.Error("Expected game written to DuplicateFile")
+		}
+		if !strings.Contains(dupBuf.String(), "[Event") {
+			t.Error("DuplicateFile output should contain game tags")
+		}
+	})
+
+	t.Run("with nil DuplicateFile", func(t *testing.T) {
+		cfg := config.NewConfig()
+		cfg.Duplicate.DuplicateFile = nil
+		cfg.OutputFile = &bytes.Buffer{}
+		// Should not panic
+		outputDuplicateGame(game, cfg)
+	})
+
+	t.Run("with JSON format", func(t *testing.T) {
+		cfg := config.NewConfig()
+		dupBuf := &bytes.Buffer{}
+		cfg.Duplicate.DuplicateFile = dupBuf
+		cfg.Output.JSONFormat = true
+		cfg.OutputFile = &bytes.Buffer{}
+
+		outputDuplicateGame(game, cfg)
+
+		if dupBuf.Len() == 0 {
+			t.Error("Expected JSON output to DuplicateFile")
+		}
+	})
+}
+
+func TestShouldOutputUnique(t *testing.T) {
+	tests := []struct {
+		suppress          bool
+		suppressOriginals bool
+		expected          bool
+	}{
+		{false, false, true},
+		{true, false, true},
+		{false, true, true},
+		{true, true, false}, // only case where unique games are suppressed
+	}
+
+	for _, tt := range tests {
+		name := fmt.Sprintf("suppress=%v,suppressOriginals=%v", tt.suppress, tt.suppressOriginals)
+		t.Run(name, func(t *testing.T) {
+			cfg := config.NewConfig()
+			cfg.Duplicate.Suppress = tt.suppress
+			cfg.Duplicate.SuppressOriginals = tt.suppressOriginals
+			got := shouldOutputUnique(cfg)
+			if got != tt.expected {
+				t.Errorf("shouldOutputUnique() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// ============================================================
+// Task 2: applyFilters pipeline and handleGameOutput
+// ============================================================
+
+func TestApplyFiltersMinimal(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+
+	game := testutil.MustParseGame(t, processorTestPGN)
+	buf := &bytes.Buffer{}
+	ctx := newTestContext(buf)
+
+	result := applyFilters(game, ctx)
+	if !result.Matched {
+		t.Error("Expected game to match with no filters")
+	}
+	if result.SkipOutput {
+		t.Error("Expected SkipOutput=false with no filters")
+	}
+}
+
+func TestApplyFiltersFixable(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+	*fixableMode = true
+
+	// Create game missing some tags
+	pgnMissing := `[Event "Test"]
+[Result "1-0"]
+
+1. e4 *`
+	game := testutil.MustParseGame(t, pgnMissing)
+	buf := &bytes.Buffer{}
+	ctx := newTestContext(buf)
+
+	result := applyFilters(game, ctx)
+	if !result.Matched {
+		t.Error("Expected fixable game to still match")
+	}
+
+	// fixGame should have added missing tags
+	if game.GetTag("White") == "" {
+		t.Error("Expected fixGame to add missing White tag")
+	}
+}
+
+func TestApplyFiltersNegate(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+	*negateMatch = true
+
+	game := testutil.MustParseGame(t, processorTestPGN)
+	buf := &bytes.Buffer{}
+	ctx := newTestContext(buf)
+
+	result := applyFilters(game, ctx)
+	if result.Matched {
+		t.Error("Expected negated match to be false for a normally matching game")
+	}
+}
+
+func TestApplyFiltersPlyBounds(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+
+	// processorTestPGN has 6 plies: 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6
+	game := testutil.MustParseGame(t, processorTestPGN)
+	buf := &bytes.Buffer{}
+	ctx := newTestContext(buf)
+
+	t.Run("minPly too high", func(t *testing.T) {
+		resetGlobalState(t)
+		*minPly = 20
+		result := applyFilters(game, ctx)
+		if result.Matched {
+			t.Error("Expected game with 6 plies to fail minPly=20")
+		}
+		*minPly = 0
+	})
+
+	t.Run("minPly within range", func(t *testing.T) {
+		resetGlobalState(t)
+		*minPly = 4
+		result := applyFilters(game, ctx)
+		if !result.Matched {
+			t.Error("Expected game with 6 plies to pass minPly=4")
+		}
+		*minPly = 0
+	})
+}
+
+func TestApplyFiltersCheckmate(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+	*checkmateFilter = true
+
+	// Simple game that does NOT end in checkmate
+	game := testutil.MustParseGame(t, processorTestPGN)
+	buf := &bytes.Buffer{}
+	ctx := newTestContext(buf)
+
+	result := applyFilters(game, ctx)
+	if result.Matched {
+		t.Error("Expected non-checkmate game to fail checkmateFilter")
+	}
+
+	// Scholar's mate (checkmate)
+	checkmatePGN := `[Event "Checkmate"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "W"]
+[Black "B"]
+[Result "1-0"]
+
+1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0`
+	checkmateGame := testutil.MustParseGame(t, checkmatePGN)
+	result2 := applyFilters(checkmateGame, ctx)
+	if !result2.Matched {
+		t.Error("Expected checkmate game to pass checkmateFilter")
+	}
+}
+
+func TestHandleGameOutput(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+
+	t.Run("no detector", func(t *testing.T) {
+		resetGlobalState(t)
+		game := testutil.MustParseGame(t, processorTestPGN)
+		buf := &bytes.Buffer{}
+		ctx := newTestContext(buf)
+		var jsonGames []*chess.Game
+
+		out, dup := handleGameOutput(game, nil, nil, ctx, &jsonGames)
+		if out != 1 || dup != 0 {
+			t.Errorf("Expected (1,0), got (%d,%d)", out, dup)
+		}
+		if buf.Len() == 0 {
+			t.Error("Expected game written to output")
+		}
+	})
+
+	t.Run("detector unique game", func(t *testing.T) {
+		resetGlobalState(t)
+		game := testutil.MustParseGame(t, processorTestPGN)
+		buf := &bytes.Buffer{}
+		ctx := newTestContext(buf)
+		ctx.detector = hashing.NewDuplicateDetector(false, 0)
+		var jsonGames []*chess.Game
+
+		out, dup := handleGameOutput(game, nil, nil, ctx, &jsonGames)
+		if out != 1 || dup != 0 {
+			t.Errorf("Expected (1,0), got (%d,%d)", out, dup)
+		}
+	})
+
+	t.Run("detector duplicate game", func(t *testing.T) {
+		resetGlobalState(t)
+		game1 := testutil.MustParseGame(t, processorTestPGN)
+		game2 := testutil.MustParseGame(t, processorTestPGN) // same moves
+
+		buf := &bytes.Buffer{}
+		ctx := newTestContext(buf)
+		ctx.detector = hashing.NewDuplicateDetector(false, 0)
+		var jsonGames []*chess.Game
+
+		// First game is unique
+		handleGameOutput(game1, nil, nil, ctx, &jsonGames)
+		resetGlobalState(t) // reset matchedCount for clarity
+
+		// Second game is duplicate
+		out, dup := handleGameOutput(game2, nil, nil, ctx, &jsonGames)
+		if out != 0 || dup != 1 {
+			t.Errorf("Expected (0,1) for duplicate, got (%d,%d)", out, dup)
+		}
+	})
+
+	t.Run("detector duplicate with SuppressOriginals", func(t *testing.T) {
+		resetGlobalState(t)
+		game1 := testutil.MustParseGame(t, processorTestPGN)
+		game2 := testutil.MustParseGame(t, processorTestPGN)
+
+		buf := &bytes.Buffer{}
+		ctx := newTestContext(buf)
+		ctx.cfg.Duplicate.SuppressOriginals = true
+		ctx.detector = hashing.NewDuplicateDetector(false, 0)
+		var jsonGames []*chess.Game
+
+		handleGameOutput(game1, nil, nil, ctx, &jsonGames)
+		resetGlobalState(t)
+
+		out, dup := handleGameOutput(game2, nil, nil, ctx, &jsonGames)
+		if out != 1 || dup != 1 {
+			t.Errorf("Expected (1,1) for duplicate+SuppressOriginals, got (%d,%d)", out, dup)
+		}
+	})
+}
+
+func TestOutputGameWithECOSplit(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+
+	t.Run("JSON format collects game", func(t *testing.T) {
+		cfg := config.NewConfig()
+		cfg.Output.JSONFormat = true
+		cfg.OutputFile = &bytes.Buffer{}
+		var jsonGames []*chess.Game
+		game := testutil.MustParseGame(t, processorTestPGN)
+
+		outputGameWithECOSplit(game, cfg, nil, &jsonGames, nil)
+
+		if len(jsonGames) != 1 {
+			t.Errorf("Expected 1 game in jsonGames, got %d", len(jsonGames))
+		}
+	})
+
+	t.Run("no JSON no ECO writes to output", func(t *testing.T) {
+		cfg := config.NewConfig()
+		buf := &bytes.Buffer{}
+		cfg.OutputFile = buf
+		var jsonGames []*chess.Game
+		game := testutil.MustParseGame(t, processorTestPGN)
+
+		outputGameWithECOSplit(game, cfg, nil, &jsonGames, nil)
+
+		if buf.Len() == 0 {
+			t.Error("Expected game written to output buffer")
+		}
+		if !strings.Contains(buf.String(), "[Event") {
+			t.Error("Output should contain game tags")
+		}
+	})
+}
+
+// ============================================================
+// Task 3: Sequential and parallel processing pipelines
+// ============================================================
+
+func TestOutputGamesSequential(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+	*quiet = true
+
+	games := testutil.MustParseGames(t, threeGamePGN)
+	buf := &bytes.Buffer{}
+	ctx := newTestContext(buf)
+
+	out, dup := outputGamesSequential(games, ctx)
+
+	if out != 3 {
+		t.Errorf("Expected 3 games output, got %d", out)
+	}
+	if dup != 0 {
+		t.Errorf("Expected 0 duplicates, got %d", dup)
+	}
+	// Verify output has all game events
+	for _, event := range []string{"Test", "Test2", "Test3"} {
+		if !strings.Contains(buf.String(), event) {
+			t.Errorf("Output missing event %q", event)
+		}
+	}
+}
+
+func TestOutputGamesSequentialStopAfter(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+	*stopAfter = 1
+	*quiet = true
+
+	games := testutil.MustParseGames(t, threeGamePGN)
+	buf := &bytes.Buffer{}
+	ctx := newTestContext(buf)
+
+	out, _ := outputGamesSequential(games, ctx)
+
+	if out != 1 {
+		t.Errorf("Expected 1 game output with stopAfter=1, got %d", out)
+	}
+}
+
+func TestOutputGamesSequentialSelectOnly(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+	*quiet = true
+
+	// selectOnly=2 means only output the 2nd game
+	selectOnlySet = map[int]bool{2: true}
+
+	games := testutil.MustParseGames(t, threeGamePGN)
+	buf := &bytes.Buffer{}
+	ctx := newTestContext(buf)
+
+	out, _ := outputGamesSequential(games, ctx)
+
+	if out != 1 {
+		t.Errorf("Expected 1 game output with selectOnly=2, got %d", out)
+	}
+	if !strings.Contains(buf.String(), "Test2") {
+		t.Error("Expected output to contain second game (Test2)")
+	}
+}
+
+func TestOutputGamesSequentialReportOnly(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+	*reportOnly = true
+	*quiet = true
+
+	games := testutil.MustParseGames(t, threeGamePGN)
+	buf := &bytes.Buffer{}
+	ctx := newTestContext(buf)
+
+	out, _ := outputGamesSequential(games, ctx)
+
+	if out != 3 {
+		t.Errorf("Expected 3 games counted in reportOnly, got %d", out)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("Expected no output in reportOnly mode, got %d bytes", buf.Len())
+	}
+}
+
+func TestProcessGameWorker(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+
+	game := testutil.MustParseGame(t, processorTestPGN)
+	buf := &bytes.Buffer{}
+	ctx := newTestContext(buf)
+
+	item := worker.WorkItem{Game: game, Index: 0}
+	result := processGameWorker(item, ctx)
+
+	if !result.Matched {
+		t.Error("Expected game to match with no filters")
+	}
+	if !result.ShouldOutput {
+		t.Error("Expected ShouldOutput=true with no filters")
+	}
+	if result.Game != game {
+		t.Error("Expected result.Game to be the same game")
+	}
+}
+
+func TestOutputGamesWithProcessingRouting(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+	*quiet = true
+
+	games := testutil.MustParseGames(t, threeGamePGN)
+
+	t.Run("workers=1 routes to sequential", func(t *testing.T) {
+		resetGlobalState(t)
+		*workers = 1
+		buf := &bytes.Buffer{}
+		ctx := newTestContext(buf)
+
+		out, dup := outputGamesWithProcessing(games, ctx)
+		if out != 3 {
+			t.Errorf("Expected 3 games output with workers=1, got %d", out)
+		}
+		if dup != 0 {
+			t.Errorf("Expected 0 duplicates, got %d", dup)
+		}
+	})
+
+	t.Run("workers>1 with enough games", func(t *testing.T) {
+		resetGlobalState(t)
+		*workers = 2
+		buf := &bytes.Buffer{}
+		ctx := newTestContext(buf)
+
+		out, dup := outputGamesWithProcessing(games, ctx)
+		if out != 3 {
+			t.Errorf("Expected 3 games output with workers=2, got %d", out)
+		}
+		if dup != 0 {
+			t.Errorf("Expected 0 duplicates, got %d", dup)
+		}
+	})
+}
+
+func TestOutputGamesParallel(t *testing.T) {
+	resetGlobalState(t)
+	restore := saveFlagPointers(t)
+	defer restore()
+	*quiet = true
+
+	// Create 5+ games for parallel processing
+	fiveGamePGN := threeGamePGN + "\n\n" + `[Event "Test4"]
+[Site "Test"]
+[Date "2024.01.04"]
+[Round "4"]
+[White "Player7"]
+[Black "Player8"]
+[Result "1-0"]
+
+1. c4 c5 2. Nc3 Nc6 1-0` + "\n\n" + `[Event "Test5"]
+[Site "Test"]
+[Date "2024.01.05"]
+[Round "5"]
+[White "Player9"]
+[Black "Player10"]
+[Result "0-1"]
+
+1. f4 e5 2. fxe5 d6 0-1`
+
+	games := testutil.MustParseGames(t, fiveGamePGN)
+	if len(games) < 5 {
+		t.Fatalf("Expected at least 5 games, got %d", len(games))
+	}
+
+	buf := &bytes.Buffer{}
+	ctx := newTestContext(buf)
+
+	out, dup := outputGamesParallel(games, ctx, 2)
+
+	if out != len(games) {
+		t.Errorf("Expected %d games output, got %d", len(games), out)
+	}
+	if dup != 0 {
+		t.Errorf("Expected 0 duplicates, got %d", dup)
+	}
+	if buf.Len() == 0 {
+		t.Error("Expected output to be non-empty")
 	}
 }
 
