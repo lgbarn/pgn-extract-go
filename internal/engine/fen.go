@@ -203,10 +203,10 @@ func parseEnPassant(board *chess.Board, parts []string) {
 // parseClocks parses the halfmove clock and fullmove number fields.
 func parseClocks(board *chess.Board, parts []string) {
 	if len(parts) >= 5 {
-		fmt.Sscanf(parts[4], "%d", &board.HalfmoveClock) //nolint:errcheck,gosec // G104: default 0 acceptable
+		fmt.Sscanf(parts[4], "%d", &board.HalfmoveClock)
 	}
 	if len(parts) >= 6 {
-		fmt.Sscanf(parts[5], "%d", &board.MoveNumber) //nolint:errcheck,gosec // G104: default 0 acceptable
+		fmt.Sscanf(parts[5], "%d", &board.MoveNumber)
 	}
 }
 
@@ -295,10 +295,19 @@ func writeEnPassant(sb *strings.Builder, board *chess.Board) {
 	}
 }
 
+// MustBoardFromFEN creates a board from a FEN string, panicking on error.
+// Use only with known-valid FEN constants (e.g., InitialFEN).
+func MustBoardFromFEN(fen string) *chess.Board {
+	board, err := NewBoardFromFEN(fen)
+	if err != nil {
+		panic(fmt.Sprintf("MustBoardFromFEN: invalid FEN %q: %v", fen, err))
+	}
+	return board
+}
+
 // NewInitialBoard creates a board with the standard starting position.
 func NewInitialBoard() *chess.Board {
-	board, _ := NewBoardFromFEN(InitialFEN) //nolint:errcheck // InitialFEN is known valid
-	return board
+	return MustBoardFromFEN(InitialFEN)
 }
 
 // NewBoardForGame creates a board for a game, using FEN tag if present.

@@ -542,7 +542,7 @@ func (l *Lexer) gatherMoveNumber(initialDigit byte) *Token {
 
 	numStr := strings.TrimRight(l.line[start:l.pos], ".")
 	var moveNum uint
-	fmt.Sscanf(numStr, "%d", &moveNum) //nolint:errcheck,gosec // G104: default 0 acceptable for invalid input
+	fmt.Sscanf(numStr, "%d", &moveNum)
 
 	return &Token{Type: MoveNumber, MoveNum: moveNum}
 }

@@ -28,7 +28,10 @@ func ParseTestGames(pgn string) []*chess.Game {
 	cfg := config.NewConfig()
 	cfg.Verbosity = 0
 	p := parser.NewParser(strings.NewReader(pgn), cfg)
-	games, _ := p.ParseAllGames() //nolint:errcheck // test helper, panics not expected
+	games, err := p.ParseAllGames()
+	if err != nil || len(games) == 0 {
+		return nil
+	}
 	return games
 }
 
