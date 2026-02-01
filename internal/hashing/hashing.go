@@ -5,6 +5,18 @@ import (
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
 )
 
+// DuplicateChecker defines the interface for duplicate detection implementations.
+// Both DuplicateDetector and ThreadSafeDuplicateDetector implement this interface.
+type DuplicateChecker interface {
+	// CheckAndAdd checks if a game is a duplicate and adds it to the hash table.
+	// Returns true if the game is a duplicate.
+	CheckAndAdd(game *chess.Game, board *chess.Board) bool
+	// DuplicateCount returns the number of duplicates detected.
+	DuplicateCount() int
+	// UniqueCount returns the number of unique games.
+	UniqueCount() int
+}
+
 // DuplicateDetector tracks seen positions for duplicate game detection.
 type DuplicateDetector struct {
 	hashTable      map[uint64][]GameSignature
