@@ -100,7 +100,7 @@ func main() {
 		if *outputFile != "" {
 			base = strings.TrimSuffix(*outputFile, filepath.Ext(*outputFile))
 		}
-		ecoSplitWriter = NewECOSplitWriter(base, *ecoSplit, cfg)
+		ecoSplitWriter = NewECOSplitWriter(base, *ecoSplit, cfg, 128)
 	}
 
 	// Set up same-setup duplicate detection
@@ -207,7 +207,7 @@ func setupDuplicateDetector(cfg *config.Config) hashing.DuplicateChecker {
 		defer file.Close()
 
 		// Load games into a temporary non-thread-safe detector
-		tempDetector := hashing.NewDuplicateDetector(false)
+		tempDetector := hashing.NewDuplicateDetector(false, 0)
 		checkGames := processInput(file, *checkFile, cfg)
 		for _, game := range checkGames {
 			board := replayGame(game)

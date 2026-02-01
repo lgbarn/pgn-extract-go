@@ -2,6 +2,7 @@
 package main
 
 import (
+	"container/list"
 	"fmt"
 	"io"
 	"os"
@@ -98,22 +99,36 @@ func (sw *SplitWriter) Close() error {
 	return nil
 }
 
+// lruFileEntry represents an entry in the LRU file handle cache.
+type lruFileEntry struct {
+	ecoPrefix string
+	file      *os.File
+	element   *list.Element
+}
+
 // ECOSplitWriter writes games to different files based on ECO code.
 // NOT thread-safe: Only accessed from the single result-consumer goroutine in outputGamesParallel.
 type ECOSplitWriter struct {
-	baseName string
-	level    int // 1=A-E, 2=A0-E9, 3=A00-E99
-	files    map[string]*os.File
-	cfg      *config.Config
+	baseName   string
+	level      int // 1=A-E, 2=A0-E9, 3=A00-E99
+	files      map[string]*lruFileEntry
+	cfg        *config.Config
+	lruList    *list.List
+	maxHandles int
 }
 
 // NewECOSplitWriter creates a new ECO-based split writer.
-func NewECOSplitWriter(baseName string, level int, cfg *config.Config) *ECOSplitWriter {
+func NewECOSplitWriter(baseName string, level int, cfg *config.Config, maxHandles int) *ECOSplitWriter {
+	if maxHandles <= 0 {
+		maxHandles = 128
+	}
 	return &ECOSplitWriter{
-		baseName: baseName,
-		level:    level,
-		files:    make(map[string]*os.File),
-		cfg:      cfg,
+		baseName:   baseName,
+		level:      level,
+		files:      make(map[string]*lruFileEntry),
+		cfg:        cfg,
+		lruList:    list.New(),
+		maxHandles: maxHandles,
 	}
 }
 
@@ -163,27 +178,81 @@ func (ew *ECOSplitWriter) getECOPrefix(game *chess.Game) string {
 }
 
 // getOrCreateFile gets an existing file or creates a new one for the given ECO prefix.
+// Uses LRU cache to limit open file handles.
 func (ew *ECOSplitWriter) getOrCreateFile(ecoPrefix string) (*os.File, error) {
-	if file, ok := ew.files[ecoPrefix]; ok {
-		return file, nil
+	entry, exists := ew.files[ecoPrefix]
+
+	// Case 1: Entry exists and file is open
+	if exists && entry.file != nil {
+		// Move to front (most recently used)
+		ew.lruList.MoveToFront(entry.element)
+		return entry.file, nil
 	}
 
 	filename := fmt.Sprintf("%s_%s.pgn", ew.baseName, ecoPrefix)
+
+	// Case 2: Entry exists but file was evicted (closed) - reopen in append mode
+	if exists && entry.file == nil {
+		file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) //nolint:gosec // G304: filename is derived from user-specified base name, G302: 0644 is appropriate for user-created output files
+		if err != nil {
+			return nil, err
+		}
+		entry.file = file
+		ew.lruList.MoveToFront(entry.element)
+		ew.evictIfNeeded()
+		return file, nil
+	}
+
+	// Case 3: New entry - create file
 	file, err := os.Create(filename) //nolint:gosec // G304: filename is derived from user-specified base name
 	if err != nil {
 		return nil, err
 	}
 
-	ew.files[ecoPrefix] = file
+	// Create new entry and add to front of LRU list
+	newEntry := &lruFileEntry{
+		ecoPrefix: ecoPrefix,
+		file:      file,
+	}
+	newEntry.element = ew.lruList.PushFront(newEntry)
+	ew.files[ecoPrefix] = newEntry
+
+	// Evict least recently used if we've exceeded maxHandles
+	ew.evictIfNeeded()
+
 	return file, nil
+}
+
+// evictIfNeeded evicts the least recently used file handle if we've exceeded maxHandles.
+func (ew *ECOSplitWriter) evictIfNeeded() {
+	if ew.lruList.Len() <= ew.maxHandles {
+		return
+	}
+
+	// Evict from back (least recently used)
+	back := ew.lruList.Back()
+	if back == nil {
+		return
+	}
+
+	entry := back.Value.(*lruFileEntry)
+	if entry.file != nil {
+		entry.file.Close() //nolint:errcheck,gosec // G104: cleanup on eviction
+		entry.file = nil
+	}
+
+	// Remove from LRU list but keep entry in map for potential reopen
+	ew.lruList.Remove(back)
 }
 
 // Close closes all open files.
 func (ew *ECOSplitWriter) Close() error {
 	var lastErr error
-	for _, file := range ew.files {
-		if err := file.Close(); err != nil {
-			lastErr = err
+	for _, entry := range ew.files {
+		if entry.file != nil {
+			if err := entry.file.Close(); err != nil {
+				lastErr = err
+			}
 		}
 	}
 	return lastErr
@@ -192,6 +261,11 @@ func (ew *ECOSplitWriter) Close() error {
 // FileCount returns the number of files created.
 func (ew *ECOSplitWriter) FileCount() int {
 	return len(ew.files)
+}
+
+// OpenHandleCount returns the number of currently open file handles.
+func (ew *ECOSplitWriter) OpenHandleCount() int {
+	return ew.lruList.Len()
 }
 
 // processInput parses games from a reader
