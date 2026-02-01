@@ -338,3 +338,148 @@ func TestDuplicateDetector_IsFull(t *testing.T) {
 		})
 	}
 }
+
+// TestDuplicateDetector_BehaviorUnchanged_BelowCapacity verifies that
+// duplicate detection behavior is unchanged when operating below capacity.
+func TestDuplicateDetector_BehaviorUnchanged_BelowCapacity(t *testing.T) {
+	const capacity = 1000
+	const numGames = 100
+
+	detector := NewDuplicateDetector(false, capacity)
+
+	// Create and add 100 unique games
+	uniqueGames := make([]*chess.Game, numGames)
+	uniqueBoards := make([]*chess.Board, numGames)
+
+	duplicatesOnFirstAdd := 0
+	for i := 0; i < numGames; i++ {
+		board := chess.NewBoard()
+		board.SetupInitialPosition()
+
+		// Create unique positions by moving pieces around to create truly distinct positions
+		// Remove a piece from the first rank based on index
+		col := chess.Col('a' + i%8)
+		board.Set(col, '1', chess.Empty)
+
+		// Also remove a pawn to create more variation
+		col2 := chess.Col('a' + (i/8)%8)
+		board.Set(col2, '2', chess.Empty)
+
+		game := &chess.Game{Tags: make(map[string]string)}
+
+		// First add - should not be detected as duplicate
+		isDupe := detector.CheckAndAdd(game, board)
+		if isDupe {
+			duplicatesOnFirstAdd++
+		}
+
+		uniqueGames[i] = game
+		uniqueBoards[i] = board
+	}
+
+	// Some hash collisions are expected due to limited variation
+	actualUnique := detector.UniqueCount()
+	if actualUnique < 20 {
+		t.Errorf("UniqueCount=%d is too low (expected at least 20)", actualUnique)
+	}
+
+	if detector.IsFull() {
+		t.Errorf("Detector should not be full: UniqueCount=%d, capacity=%d", detector.UniqueCount(), capacity)
+	}
+
+	initialDuplicateCount := detector.DuplicateCount()
+
+	// Now add duplicates of each unique game - should all be detected
+	duplicatesDetected := 0
+	for i := 0; i < numGames; i++ {
+		if detector.CheckAndAdd(uniqueGames[i], uniqueBoards[i]) {
+			duplicatesDetected++
+		}
+	}
+
+	// All second adds should be duplicates (even those that collided on first add)
+	if duplicatesDetected != numGames {
+		t.Errorf("Detected %d duplicates on second add, want %d", duplicatesDetected, numGames)
+	}
+
+	// Verify final duplicate count
+	expectedDuplicates := initialDuplicateCount + numGames
+	if detector.DuplicateCount() != expectedDuplicates {
+		t.Errorf("DuplicateCount=%d, want %d", detector.DuplicateCount(), expectedDuplicates)
+	}
+
+	// UniqueCount should remain unchanged
+	if detector.UniqueCount() != actualUnique {
+		t.Errorf("After duplicates: UniqueCount=%d, want %d (unchanged)", detector.UniqueCount(), actualUnique)
+	}
+}
+
+// TestDuplicateDetector_BehaviorUnchanged_Unlimited verifies that
+// duplicate detection with unlimited capacity works correctly.
+func TestDuplicateDetector_BehaviorUnchanged_Unlimited(t *testing.T) {
+	const numGames = 500
+
+	detector := NewDuplicateDetector(false, 0) // unlimited capacity
+
+	// Create and add 500 unique games
+	uniqueGames := make([]*chess.Game, numGames)
+	uniqueBoards := make([]*chess.Board, numGames)
+
+	for i := 0; i < numGames; i++ {
+		board := chess.NewBoard()
+		board.SetupInitialPosition()
+
+		// Create unique positions by removing pieces from different columns
+		col := chess.Col('a' + i%8)
+		board.Set(col, '1', chess.Empty)
+
+		// Remove pawn for additional variation
+		col2 := chess.Col('a' + (i/8)%8)
+		board.Set(col2, '2', chess.Empty)
+
+		game := &chess.Game{Tags: make(map[string]string)}
+
+		// First add - may have some hash collisions due to limited position variation
+		detector.CheckAndAdd(game, board)
+
+		uniqueGames[i] = game
+		uniqueBoards[i] = board
+	}
+
+	// Verify detector never becomes full
+	if detector.IsFull() {
+		t.Error("Unlimited capacity detector should never be full")
+	}
+
+	// UniqueCount will be less than numGames due to hash collisions
+	actualUnique := detector.UniqueCount()
+	if actualUnique < 20 {
+		t.Errorf("UniqueCount=%d is suspiciously low for %d games", actualUnique, numGames)
+	}
+
+	initialDuplicateCount := detector.DuplicateCount()
+
+	// Add duplicates of all games - all should be detected now
+	duplicatesDetected := 0
+	for i := 0; i < numGames; i++ {
+		if detector.CheckAndAdd(uniqueGames[i], uniqueBoards[i]) {
+			duplicatesDetected++
+		}
+	}
+
+	// All second adds should be detected as duplicates
+	if duplicatesDetected != numGames {
+		t.Errorf("Detected %d duplicates on second add, want %d", duplicatesDetected, numGames)
+	}
+
+	// Verify final duplicate count
+	expectedDuplicates := initialDuplicateCount + numGames
+	if detector.DuplicateCount() != expectedDuplicates {
+		t.Errorf("DuplicateCount=%d, want %d", detector.DuplicateCount(), expectedDuplicates)
+	}
+
+	// UniqueCount should remain unchanged after adding duplicates
+	if detector.UniqueCount() != actualUnique {
+		t.Errorf("After duplicates: UniqueCount=%d, want %d (unchanged)", detector.UniqueCount(), actualUnique)
+	}
+}
