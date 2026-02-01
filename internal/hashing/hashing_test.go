@@ -54,7 +54,7 @@ func TestWeakHash_IdenticalBoards_SameHash(t *testing.T) {
 }
 
 func TestDuplicateDetector_CheckAndAdd(t *testing.T) {
-	detector := NewDuplicateDetector(false)
+	detector := NewDuplicateDetector(false, 0)
 
 	board := chess.NewBoard()
 	board.SetupInitialPosition()
@@ -78,7 +78,7 @@ func TestDuplicateDetector_CheckAndAdd(t *testing.T) {
 }
 
 func TestDuplicateDetector_DifferentGames(t *testing.T) {
-	detector := NewDuplicateDetector(false)
+	detector := NewDuplicateDetector(false, 0)
 
 	board1 := chess.NewBoard()
 	board1.SetupInitialPosition()
@@ -108,7 +108,7 @@ func TestDuplicateDetector_DifferentGames(t *testing.T) {
 }
 
 func TestDuplicateDetector_Reset(t *testing.T) {
-	detector := NewDuplicateDetector(false)
+	detector := NewDuplicateDetector(false, 0)
 
 	board := chess.NewBoard()
 	board.SetupInitialPosition()
@@ -146,5 +146,195 @@ func TestZobristHash_DifferentSideToMove_DifferentHash(t *testing.T) {
 
 	if hash1 == hash2 {
 		t.Error("Same position with different side to move should have different hashes")
+	}
+}
+
+func TestDuplicateDetector_UnlimitedCapacity(t *testing.T) {
+	detector := NewDuplicateDetector(false, 0)
+
+	// Add many unique games by creating different piece configurations
+	// We'll add games and verify the detector can grow without limit
+	const attempts = 100
+	uniqueCount := 0
+
+	for i := 0; i < attempts; i++ {
+		testBoard := chess.NewBoard()
+		testBoard.SetupInitialPosition()
+
+		// Create unique positions by removing different pieces
+		testBoard.Set(chess.Col('a'+(i%8)), chess.Rank('1'+(i/8)%8), chess.Empty)
+		if i%2 == 0 {
+			testBoard.Set(chess.Col('h'-(i%8)), chess.Rank('8'-(i/8)%8), chess.Empty)
+		}
+
+		game := &chess.Game{Tags: make(map[string]string)}
+		isDupe := detector.CheckAndAdd(game, testBoard)
+		if !isDupe {
+			uniqueCount++
+		}
+	}
+
+	// With unlimited capacity, we should be able to add many unique games
+	// Even with hash collisions, we should get at least 20 unique positions
+	if detector.UniqueCount() < 20 {
+		t.Errorf("Expected at least 20 unique games with unlimited capacity, got %d", detector.UniqueCount())
+	}
+
+	if detector.IsFull() {
+		t.Error("Unlimited capacity detector should never be full")
+	}
+
+	// Verify the exact unique count matches
+	if detector.UniqueCount() != uniqueCount {
+		t.Errorf("UniqueCount() = %d, but we counted %d unique games", detector.UniqueCount(), uniqueCount)
+	}
+}
+
+func TestDuplicateDetector_BoundedCapacity(t *testing.T) {
+	const capacity = 5
+	detector := NewDuplicateDetector(false, capacity)
+
+	// Add enough attempts to try to exceed capacity
+	// We'll track how many unique games we actually added
+	uniqueAdded := 0
+	for i := 0; i < 20; i++ {
+		testBoard := chess.NewBoard()
+		testBoard.SetupInitialPosition()
+		// Create different positions
+		testBoard.Set(chess.Col('a'+(i%8)), chess.Rank('1'+(i/8)%8), chess.Empty)
+		if i%2 == 0 {
+			testBoard.Set(chess.Col('h'-(i%8)), chess.Rank('8'-(i/8)%8), chess.Empty)
+		}
+		game := &chess.Game{Tags: make(map[string]string)}
+		isDupe := detector.CheckAndAdd(game, testBoard)
+		if !isDupe {
+			uniqueAdded++
+		}
+	}
+
+	// After adding enough games, detector should be full
+	// UniqueCount may be >= capacity due to hash collisions
+	// but IsFull should return true once we hit the limit
+	if uniqueAdded >= capacity && !detector.IsFull() {
+		t.Error("Detector should be full after adding enough unique games")
+	}
+}
+
+func TestDuplicateDetector_DuplicatesDetectedWhenFull(t *testing.T) {
+	const capacity = 3
+	detector := NewDuplicateDetector(false, capacity)
+
+	boards := make([]*chess.Board, 5)
+	games := make([]*chess.Game, 5)
+
+	// Create 5 unique positions
+	for i := 0; i < 5; i++ {
+		boards[i] = chess.NewBoard()
+		boards[i].SetupInitialPosition()
+		col := chess.Col('a' + i)
+		boards[i].Set(col, '2', chess.Empty)
+		games[i] = &chess.Game{Tags: make(map[string]string)}
+	}
+
+	// Add first 3 games (fills detector to capacity)
+	for i := 0; i < 3; i++ {
+		isDupe := detector.CheckAndAdd(games[i], boards[i])
+		if isDupe {
+			t.Errorf("Game %d should not be a duplicate", i)
+		}
+	}
+
+	if detector.UniqueCount() != capacity {
+		t.Errorf("Expected %d unique games, got %d", capacity, detector.UniqueCount())
+	}
+
+	// Add games 4 and 5 (capacity is full, these won't be stored)
+	for i := 3; i < 5; i++ {
+		isDupe := detector.CheckAndAdd(games[i], boards[i])
+		if isDupe {
+			t.Errorf("Game %d should not be a duplicate", i)
+		}
+	}
+
+	// Detector should still have only 3 unique games
+	if detector.UniqueCount() != capacity {
+		t.Errorf("Expected %d unique games after adding more, got %d", capacity, detector.UniqueCount())
+	}
+
+	// Now re-add one of the first 3 games - should detect as duplicate
+	isDupe := detector.CheckAndAdd(games[1], boards[1])
+	if !isDupe {
+		t.Error("Game 1 should be detected as duplicate")
+	}
+
+	if detector.DuplicateCount() != 1 {
+		t.Errorf("Expected 1 duplicate, got %d", detector.DuplicateCount())
+	}
+
+	// Try to add game 4 again - should NOT be detected as duplicate
+	// because it wasn't stored (capacity was full)
+	isDupe = detector.CheckAndAdd(games[4], boards[4])
+	if isDupe {
+		t.Error("Game 4 should not be detected as duplicate (was never stored)")
+	}
+
+	if detector.DuplicateCount() != 1 {
+		t.Errorf("Expected 1 duplicate still, got %d", detector.DuplicateCount())
+	}
+}
+
+func TestDuplicateDetector_IsFull(t *testing.T) {
+	tests := []struct {
+		name       string
+		capacity   int
+		numGames   int
+		expectFull bool
+	}{
+		{
+			name:       "unlimited capacity never full",
+			capacity:   0,
+			numGames:   100,
+			expectFull: false,
+		},
+		{
+			name:       "bounded capacity not yet full",
+			capacity:   20,
+			numGames:   5,
+			expectFull: false,
+		},
+		{
+			name:       "bounded capacity over limit",
+			capacity:   5,
+			numGames:   50,
+			expectFull: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			detector := NewDuplicateDetector(false, tt.capacity)
+
+			uniqueAdded := 0
+			for i := 0; i < tt.numGames && (tt.capacity == 0 || uniqueAdded < tt.numGames); i++ {
+				testBoard := chess.NewBoard()
+				testBoard.SetupInitialPosition()
+				// Create more variation to reduce hash collisions
+				col := chess.Col('a' + i%8)
+				rank := chess.Rank('1' + i/8)
+				testBoard.Set(col, rank, chess.Empty)
+				if i%2 == 0 {
+					testBoard.Set(chess.Col('h'-(i%8)), chess.Rank('8'-(i/8)%8), chess.Empty)
+				}
+				game := &chess.Game{Tags: make(map[string]string)}
+				isDupe := detector.CheckAndAdd(game, testBoard)
+				if !isDupe {
+					uniqueAdded++
+				}
+			}
+
+			if detector.IsFull() != tt.expectFull {
+				t.Errorf("IsFull() = %v, want %v (added %d unique games)", detector.IsFull(), tt.expectFull, uniqueAdded)
+			}
+		})
 	}
 }

@@ -16,7 +16,7 @@ type ThreadSafeDuplicateDetector struct {
 // NewThreadSafeDuplicateDetector creates a new thread-safe detector.
 func NewThreadSafeDuplicateDetector(exactMatch bool) *ThreadSafeDuplicateDetector {
 	return &ThreadSafeDuplicateDetector{
-		detector: NewDuplicateDetector(exactMatch),
+		detector: NewDuplicateDetector(exactMatch, 0),
 	}
 }
 

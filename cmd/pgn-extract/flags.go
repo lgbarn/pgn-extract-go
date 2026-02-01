@@ -144,7 +144,8 @@ var (
 	_ = flag.String("A", "", "File containing command-line arguments (one per line, # for comments)")
 
 	// ECO-based output splitting
-	ecoSplit = flag.Int("E", 0, "Split output by ECO code: 1=A-E, 2=A0-E9, 3=A00-E99")
+	ecoSplit       = flag.Int("E", 0, "Split output by ECO code: 1=A-E, 2=A0-E9, 3=A00-E99")
+	ecoMaxHandles  = flag.Int("eco-max-handles", 128, "Maximum open file handles for ECO splitting")
 
 	// Split output filename pattern
 	splitPattern = flag.String("splitpattern", "%s_%d.pgn", "Filename pattern for split output (use %s for base, %d for number)")
@@ -205,6 +206,7 @@ func applyContentFlags(cfg *config.Config) {
 	cfg.Output.StripClockAnnotations = *noClocks
 	cfg.Output.JSONFormat = *jsonOutput
 	cfg.Output.MaxLineLength = uint(*lineLength)
+	cfg.Output.ECOMaxHandles = *ecoMaxHandles
 }
 
 // applyOutputFormatFlags configures the output format.

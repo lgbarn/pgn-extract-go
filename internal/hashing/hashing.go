@@ -22,6 +22,7 @@ type DuplicateDetector struct {
 	hashTable      map[uint64][]GameSignature
 	useExactMatch  bool
 	duplicateCount int
+	maxCapacity    int // 0 = unlimited
 }
 
 // GameSignature stores identifying information about a game.
@@ -32,10 +33,12 @@ type GameSignature struct {
 }
 
 // NewDuplicateDetector creates a new duplicate detector.
-func NewDuplicateDetector(exactMatch bool) *DuplicateDetector {
+// maxCapacity of 0 means unlimited capacity.
+func NewDuplicateDetector(exactMatch bool, maxCapacity int) *DuplicateDetector {
 	return &DuplicateDetector{
 		hashTable:     make(map[uint64][]GameSignature),
 		useExactMatch: exactMatch,
+		maxCapacity:   maxCapacity,
 	}
 }
 
@@ -66,8 +69,10 @@ func (d *DuplicateDetector) CheckAndAdd(game *chess.Game, board *chess.Board) bo
 		}
 	}
 
-	// Add to hash table
-	d.hashTable[hash] = append(d.hashTable[hash], sig)
+	// Add to hash table if not at capacity
+	if d.maxCapacity <= 0 || len(d.hashTable) < d.maxCapacity {
+		d.hashTable[hash] = append(d.hashTable[hash], sig)
+	}
 	return false
 }
 
@@ -97,6 +102,12 @@ func (d *DuplicateDetector) UniqueCount() int {
 func (d *DuplicateDetector) Reset() {
 	d.hashTable = make(map[uint64][]GameSignature)
 	d.duplicateCount = 0
+}
+
+// IsFull returns true if the detector has reached its capacity limit.
+// Always returns false for unlimited capacity (maxCapacity = 0).
+func (d *DuplicateDetector) IsFull() bool {
+	return d.maxCapacity > 0 && len(d.hashTable) >= d.maxCapacity
 }
 
 // countMoves counts the number of half-moves in a game.

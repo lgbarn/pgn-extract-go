@@ -44,7 +44,7 @@ func BenchmarkDuplicateDetector_CheckAndAdd(b *testing.B) {
 	initialFEN := benchFENPositions["Initial"]
 
 	b.Run("Unique", func(b *testing.B) {
-		dd := NewDuplicateDetector(false)
+		dd := NewDuplicateDetector(false, 0)
 		games := make([]*chess.Game, 100)
 		boards := make([]*chess.Board, 100)
 		for i := range boards {
@@ -60,7 +60,7 @@ func BenchmarkDuplicateDetector_CheckAndAdd(b *testing.B) {
 	})
 
 	b.Run("Duplicates", func(b *testing.B) {
-		dd := NewDuplicateDetector(false)
+		dd := NewDuplicateDetector(false, 0)
 		board, _ := engine.NewBoardFromFEN(initialFEN)
 		game := &chess.Game{Tags: make(map[string]string)}
 		dd.CheckAndAdd(game, board)

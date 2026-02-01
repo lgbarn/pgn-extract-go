@@ -116,7 +116,7 @@ func TestThreadSafeDuplicateDetector_NoRace(t *testing.T) {
 }
 
 func TestThreadSafeDuplicateDetector_LoadFromDetector(t *testing.T) {
-	regular := NewDuplicateDetector(false)
+	regular := NewDuplicateDetector(false, 0)
 	board, _ := engine.NewBoardFromFEN(engine.InitialFEN)
 	game := &chess.Game{Tags: map[string]string{"Event": "Test"}}
 	regular.CheckAndAdd(game, board)

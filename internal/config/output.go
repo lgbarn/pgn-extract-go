@@ -40,6 +40,9 @@ type OutputConfig struct {
 
 	// OutputEvaluation includes engine evaluation annotations
 	OutputEvaluation bool
+
+	// ECOMaxHandles is the maximum number of open file handles for ECO splitting
+	ECOMaxHandles int
 }
 
 // NewOutputConfig creates an OutputConfig with default values.
@@ -54,5 +57,6 @@ func NewOutputConfig() *OutputConfig {
 		KeepComments:    true,
 		KeepVariations:  true,
 		TagFormat:       AllTags,
+		ECOMaxHandles:   128,
 	}
 }
