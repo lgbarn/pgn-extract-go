@@ -392,17 +392,17 @@ func processAllInputs(ctx *ProcessingContext, splitWriter *SplitWriter) (totalGa
 			outputGames += out
 			duplicates += dup
 
-			file.Close() //nolint:errcheck,gosec // G104: cleanup on exit
+			_ = file.Close() // cleanup on exit
 		}
 	}
 
 	if splitWriter != nil {
-		splitWriter.Close() //nolint:errcheck,gosec // G104: cleanup on exit
+		_ = splitWriter.Close() // cleanup on exit
 	}
 
 	// Close ECO split writer if used
 	if ctx.ecoSplitWriter != nil {
-		ctx.ecoSplitWriter.Close() //nolint:errcheck,gosec // G104: cleanup on exit
+		_ = ctx.ecoSplitWriter.Close() // cleanup on exit
 	}
 
 	return totalGames, outputGames, duplicates

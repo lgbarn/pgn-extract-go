@@ -344,7 +344,7 @@ func applyGameInfoFilters(info *GameAnalysis) bool {
 
 // checkPieceCount checks if the game ever reaches a position with exactly N pieces.
 func checkPieceCount(game *chess.Game, targetCount int) bool {
-	board, _ := engine.NewBoardFromFEN(engine.InitialFEN) //nolint:errcheck // InitialFEN is known valid
+	board := engine.MustBoardFromFEN(engine.InitialFEN)
 
 	// Check initial position
 	if countPieces(board) == targetCount {

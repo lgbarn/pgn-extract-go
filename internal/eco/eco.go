@@ -81,7 +81,7 @@ func (ec *ECOClassifier) addECOEntry(game *chess.Game) {
 		return
 	}
 
-	board, _ := engine.NewBoardFromFEN(engine.InitialFEN) //nolint:errcheck // InitialFEN is known valid
+	board := engine.MustBoardFromFEN(engine.InitialFEN)
 	var cumulativeHash uint64
 	halfMoves := 0
 
@@ -180,7 +180,7 @@ func (ec *ECOClassifier) boardForGame(game *chess.Game) *chess.Board {
 			return board
 		}
 	}
-	board, _ := engine.NewBoardFromFEN(engine.InitialFEN) //nolint:errcheck // InitialFEN is known valid
+	board := engine.MustBoardFromFEN(engine.InitialFEN)
 	return board
 }
 

@@ -72,7 +72,7 @@ func (mm *MaterialMatcher) parsePieces(s string, color chess.Colour) {
 
 // MatchGame checks if any position in the game matches the material pattern.
 func (mm *MaterialMatcher) MatchGame(game *chess.Game) bool {
-	board, _ := engine.NewBoardFromFEN(engine.InitialFEN) //nolint:errcheck // InitialFEN is known valid
+	board := engine.MustBoardFromFEN(engine.InitialFEN)
 
 	// Check starting position
 	if mm.matchPosition(board) {

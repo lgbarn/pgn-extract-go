@@ -73,7 +73,7 @@ func NewSplitWriterWithPattern(baseName string, gamesPerFile int, pattern string
 func (sw *SplitWriter) Write(p []byte) (n int, err error) {
 	if sw.currentFile == nil || sw.gameCount >= sw.gamesPerFile {
 		if sw.currentFile != nil {
-			sw.currentFile.Close() //nolint:errcheck,gosec // G104: cleanup before creating new file
+			_ = sw.currentFile.Close() // cleanup before creating new file
 			sw.fileNumber++
 		}
 		filename := fmt.Sprintf(sw.pattern, sw.baseName, sw.fileNumber)
@@ -238,7 +238,7 @@ func (ew *ECOSplitWriter) evictIfNeeded() {
 
 	entry := back.Value.(*lruFileEntry)
 	if entry.file != nil {
-		entry.file.Close() //nolint:errcheck,gosec // G104: cleanup on eviction
+		_ = entry.file.Close() // cleanup on eviction
 		entry.file = nil
 	}
 
@@ -482,7 +482,7 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 		// Apply move truncation before output
 		truncateMoves(result.Game)
 
-		gameInfo, _ := result.GameInfo.(*GameAnalysis) //nolint:errcheck // type assertion with ok
+		gameInfo, _ := result.GameInfo.(*GameAnalysis)
 		out, dup := handleGameOutput(result.Game, result.Board, gameInfo, ctx, &jsonGames)
 		atomic.AddInt64(&outputCount, int64(out))
 		atomic.AddInt64(&duplicateCount, int64(dup))

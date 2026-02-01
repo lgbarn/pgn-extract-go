@@ -147,7 +147,7 @@ func (vm *VariationMatcher) matchPositionSequence(game *chess.Game, seq []string
 		return true
 	}
 
-	board, _ := engine.NewBoardFromFEN(engine.InitialFEN) //nolint:errcheck // InitialFEN is known valid
+	board := engine.MustBoardFromFEN(engine.InitialFEN)
 	seqIdx := 0
 
 	// Check initial position
