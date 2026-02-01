@@ -2,6 +2,7 @@ package hashing
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
@@ -9,7 +10,7 @@ import (
 )
 
 func TestThreadSafeDuplicateDetector_Concurrent(t *testing.T) {
-	detector := NewThreadSafeDuplicateDetector(false)
+	detector := NewThreadSafeDuplicateDetector(false, 0)
 	board, err := engine.NewBoardFromFEN(engine.InitialFEN)
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +57,7 @@ func TestThreadSafeDuplicateDetector_Concurrent(t *testing.T) {
 }
 
 func TestThreadSafeDuplicateDetector_DifferentPositions(t *testing.T) {
-	detector := NewThreadSafeDuplicateDetector(false)
+	detector := NewThreadSafeDuplicateDetector(false, 0)
 
 	fens := []string{
 		engine.InitialFEN,
@@ -98,7 +99,7 @@ func TestThreadSafeDuplicateDetector_DifferentPositions(t *testing.T) {
 }
 
 func TestThreadSafeDuplicateDetector_NoRace(t *testing.T) {
-	detector := NewThreadSafeDuplicateDetector(false)
+	detector := NewThreadSafeDuplicateDetector(false, 0)
 	board, _ := engine.NewBoardFromFEN(engine.InitialFEN)
 	game := &chess.Game{Tags: map[string]string{"Event": "Test"}}
 
@@ -125,7 +126,7 @@ func TestThreadSafeDuplicateDetector_LoadFromDetector(t *testing.T) {
 		t.Errorf("Expected 1 unique in regular detector, got %d", regular.UniqueCount())
 	}
 
-	threadSafe := NewThreadSafeDuplicateDetector(false)
+	threadSafe := NewThreadSafeDuplicateDetector(false, 0)
 	threadSafe.LoadFromDetector(regular)
 
 	isDupe := threadSafe.CheckAndAdd(game, board)
@@ -135,5 +136,56 @@ func TestThreadSafeDuplicateDetector_LoadFromDetector(t *testing.T) {
 
 	if threadSafe.DuplicateCount() != 1 {
 		t.Errorf("Expected 1 duplicate, got %d", threadSafe.DuplicateCount())
+	}
+}
+
+func TestThreadSafeDuplicateDetector_MaxCapacity(t *testing.T) {
+	const capacity = 50
+	const numWorkers = 10
+	const gamesPerWorker = 100
+
+	detector := NewThreadSafeDuplicateDetector(false, capacity)
+
+	// Track how many unique games we actually add
+	uniqueAdded := int32(0)
+
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			localUnique := 0
+			for j := 0; j < gamesPerWorker; j++ {
+				// Create unique positions
+				board := chess.NewBoard()
+				board.SetupInitialPosition()
+				idx := workerID*gamesPerWorker + j
+				col := chess.Col('a' + idx%8)
+				rank := chess.Rank('1' + idx/8)
+				board.Set(col, rank, chess.Empty)
+				if idx%2 == 0 {
+					board.Set(chess.Col('h'-(idx%8)), chess.Rank('8'-(idx/8)%8), chess.Empty)
+				}
+				game := &chess.Game{Tags: map[string]string{"Event": "Test"}}
+				isDupe := detector.CheckAndAdd(game, board)
+				if !isDupe {
+					localUnique++
+				}
+			}
+			atomic.AddInt32(&uniqueAdded, int32(localUnique))
+		}(i)
+	}
+	wg.Wait()
+
+	// With capacity limit, we should stop accepting new unique games after capacity is reached
+	// The detector should be full if we added enough unique games
+	if uniqueAdded >= int32(capacity) && !detector.IsFull() {
+		t.Errorf("Expected detector to be full after adding %d unique games (capacity %d)", uniqueAdded, capacity)
+	}
+
+	// Verify that UniqueCount doesn't exceed a reasonable bound
+	// (allowing for some hash collisions that share buckets)
+	if detector.UniqueCount() > capacity*2 {
+		t.Errorf("Expected UniqueCount <= %d (allowing for collisions), got %d", capacity*2, detector.UniqueCount())
 	}
 }

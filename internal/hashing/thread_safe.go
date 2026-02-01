@@ -14,9 +14,10 @@ type ThreadSafeDuplicateDetector struct {
 }
 
 // NewThreadSafeDuplicateDetector creates a new thread-safe detector.
-func NewThreadSafeDuplicateDetector(exactMatch bool) *ThreadSafeDuplicateDetector {
+// maxCapacity of 0 means unlimited capacity.
+func NewThreadSafeDuplicateDetector(exactMatch bool, maxCapacity int) *ThreadSafeDuplicateDetector {
 	return &ThreadSafeDuplicateDetector{
-		detector: NewDuplicateDetector(exactMatch, 0),
+		detector: NewDuplicateDetector(exactMatch, maxCapacity),
 	}
 }
 
@@ -48,4 +49,12 @@ func (d *ThreadSafeDuplicateDetector) LoadFromDetector(other *DuplicateDetector)
 	for hash, sigs := range other.hashTable {
 		d.detector.hashTable[hash] = append(d.detector.hashTable[hash], sigs...)
 	}
+}
+
+// IsFull returns true if the detector has reached its capacity limit.
+// Always returns false for unlimited capacity (maxCapacity = 0).
+func (d *ThreadSafeDuplicateDetector) IsFull() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.detector.IsFull()
 }
