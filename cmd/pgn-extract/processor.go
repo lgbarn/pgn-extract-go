@@ -198,7 +198,8 @@ func (ew *ECOSplitWriter) getOrCreateFile(ecoPrefix string) (*os.File, error) {
 			return nil, err
 		}
 		entry.file = file
-		ew.lruList.MoveToFront(entry.element)
+		// Re-add to LRU list (element was removed during eviction)
+		entry.element = ew.lruList.PushFront(entry)
 		ew.evictIfNeeded()
 		return file, nil
 	}
@@ -243,6 +244,7 @@ func (ew *ECOSplitWriter) evictIfNeeded() {
 
 	// Remove from LRU list but keep entry in map for potential reopen
 	ew.lruList.Remove(back)
+	entry.element = nil // Defensive: element is no longer in the list
 }
 
 // Close closes all open files.

@@ -407,6 +407,11 @@ func TestECOSplitWriter_LRU_ReopensEvictedFile(t *testing.T) {
 		t.Fatalf("WriteGame(A00) second time failed: %v", err)
 	}
 
+	// Verify: OpenHandleCount should still be 2 (maxHandles) after reopen
+	if writer.OpenHandleCount() != 2 {
+		t.Errorf("After reopening A00: OpenHandleCount = %d, want 2", writer.OpenHandleCount())
+	}
+
 	// Close to flush all writes
 	writer.Close()
 
