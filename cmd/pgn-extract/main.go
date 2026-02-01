@@ -189,12 +189,11 @@ func setupDuplicateFile(cfg *config.Config) {
 }
 
 // setupDuplicateDetector creates and configures the duplicate detector.
-func setupDuplicateDetector(cfg *config.Config) *hashing.DuplicateDetector {
+func setupDuplicateDetector(cfg *config.Config) hashing.DuplicateChecker {
 	if !*suppressDuplicates && *duplicateFile == "" && !*outputDupsOnly && *checkFile == "" {
 		return nil
 	}
 
-	detector := hashing.NewDuplicateDetector(false)
 	cfg.Duplicate.Suppress = *suppressDuplicates
 	cfg.Duplicate.SuppressOriginals = *outputDupsOnly
 
@@ -207,18 +206,26 @@ func setupDuplicateDetector(cfg *config.Config) *hashing.DuplicateDetector {
 		}
 		defer file.Close()
 
+		// Load games into a temporary non-thread-safe detector
+		tempDetector := hashing.NewDuplicateDetector(false)
 		checkGames := processInput(file, *checkFile, cfg)
 		for _, game := range checkGames {
 			board := replayGame(game)
-			detector.CheckAndAdd(game, board)
+			tempDetector.CheckAndAdd(game, board)
 		}
 
 		if cfg.Verbosity > 0 {
 			fmt.Fprintf(cfg.LogFile, "Loaded %d games from check file\n", len(checkGames))
 		}
+
+		// Create thread-safe detector and load from temporary detector
+		detector := hashing.NewThreadSafeDuplicateDetector(false)
+		detector.LoadFromDetector(tempDetector)
+		return detector
 	}
 
-	return detector
+	// No check file - create empty thread-safe detector
+	return hashing.NewThreadSafeDuplicateDetector(false)
 }
 
 // loadECOClassifier loads the ECO classification file if specified.
@@ -402,7 +409,7 @@ func processAllInputs(ctx *ProcessingContext, splitWriter *SplitWriter) (totalGa
 }
 
 // reportStatistics prints the final statistics to stderr.
-func reportStatistics(detector *hashing.DuplicateDetector, outputGames, duplicates, totalGames int) {
+func reportStatistics(detector hashing.DuplicateChecker, outputGames, duplicates, totalGames int) {
 	if detector != nil {
 		fmt.Fprintf(os.Stderr, "%d game(s) output, %d duplicate(s) out of %d.\n", outputGames, duplicates, totalGames)
 	} else {

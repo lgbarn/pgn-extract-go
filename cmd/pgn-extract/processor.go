@@ -32,7 +32,7 @@ func withOutputFile(cfg *config.Config, w io.Writer, fn func()) {
 // ProcessingContext holds all processing state
 type ProcessingContext struct {
 	cfg              *config.Config
-	detector         *hashing.DuplicateDetector
+	detector         hashing.DuplicateChecker
 	setupDetector    *hashing.SetupDuplicateDetector
 	ecoClassifier    *eco.ECOClassifier
 	gameFilter       *matching.GameFilter
