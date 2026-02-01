@@ -42,7 +42,8 @@ type ProcessingContext struct {
 	ecoSplitWriter   *ECOSplitWriter
 }
 
-// SplitWriter handles writing to multiple output files
+// SplitWriter handles writing to multiple output files.
+// NOT thread-safe: Only accessed from the single result-consumer goroutine in outputGamesParallel.
 type SplitWriter struct {
 	baseName     string
 	pattern      string // filename pattern with %s for base and %d for number
@@ -98,6 +99,7 @@ func (sw *SplitWriter) Close() error {
 }
 
 // ECOSplitWriter writes games to different files based on ECO code.
+// NOT thread-safe: Only accessed from the single result-consumer goroutine in outputGamesParallel.
 type ECOSplitWriter struct {
 	baseName string
 	level    int // 1=A-E, 2=A0-E9, 3=A00-E99
@@ -343,6 +345,11 @@ func outputDuplicateGame(game *chess.Game, cfg *config.Config) {
 }
 
 // outputGamesParallel processes games using a worker pool for parallel execution.
+//
+// Concurrency model: Multiple worker goroutines process games in parallel, but all results
+// are consumed by a single goroutine (the main function body below). This ensures that
+// non-thread-safe components (jsonGames slice, ECOSplitWriter, SplitWriter) are only
+// accessed from one goroutine, avoiding data races without requiring synchronization.
 func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers int) (int, int) {
 	cfg := ctx.cfg
 	outputCount := int64(0)
@@ -376,6 +383,7 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 		pool.Close()
 	}()
 
+	// jsonGames is only appended to from this single consumer goroutine (not thread-safe).
 	var jsonGames []*chess.Game
 
 	for result := range pool.Results() {
