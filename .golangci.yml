@@ -146,7 +146,7 @@ linters:
         linters:
           - cyclop
       # AddCriterion only returns error for OpRegex; all other callers use safe operators
-      - source: "AddCriterion"
+      - source: "\\.AddCriterion\\("
         linters:
           - gosec
 

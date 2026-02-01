@@ -159,7 +159,6 @@ func (pm *PositionMatcher) matchPattern(board *chess.Board, pattern *FENPattern)
 		if i >= 8 {
 			break
 		}
-		// nolint:gosec // G602: i is bounds-checked above, so 7-i is always in [0,7]
 		if !matchRank(boardRanks[7-i], patternRank) {
 			return false
 		}
@@ -181,7 +180,7 @@ func boardToRanks(board *chess.Board) [8]string {
 			sb.WriteByte(pieceToChar(piece))
 		}
 
-		ranks[r] = sb.String() // nolint:gosec // G602: r is bounded by loop condition [0,7]
+		ranks[r] = sb.String()
 	}
 
 	return ranks
