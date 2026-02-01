@@ -459,3 +459,65 @@ func TestECOSplitWriter_LRU_UnlimitedWhenHigh(t *testing.T) {
 	}
 }
 
+// TestECOSplitWriter_LRU_HandleCountBounded verifies that the LRU cache
+// properly bounds the number of open file handles when writing games
+// with many distinct ECO codes.
+func TestECOSplitWriter_LRU_HandleCountBounded(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseName := filepath.Join(tmpDir, "eco")
+	cfg := config.NewConfig()
+	cfg.OutputFile = os.Stdout
+
+	const maxHandles = 5
+	const level = 3 // Full ECO code: A00-E99
+	writer := NewECOSplitWriter(baseName, level, cfg, maxHandles)
+	defer writer.Close()
+
+	// Create games with 20 distinct ECO codes (A00-A19)
+	ecoCodes := []string{
+		"A00", "A01", "A02", "A03", "A04",
+		"A05", "A06", "A07", "A08", "A09",
+		"A10", "A11", "A12", "A13", "A14",
+		"A15", "A16", "A17", "A18", "A19",
+	}
+
+	for i, eco := range ecoCodes {
+		game := makeMinimalGame(eco)
+		if err := writer.WriteGame(game); err != nil {
+			t.Fatalf("WriteGame(%s) failed: %v", eco, err)
+		}
+
+		// After the 5th write, OpenHandleCount should never exceed maxHandles
+		if i >= maxHandles {
+			if writer.OpenHandleCount() > maxHandles {
+				t.Errorf("After writing game %d (%s): OpenHandleCount=%d exceeds maxHandles=%d",
+					i+1, eco, writer.OpenHandleCount(), maxHandles)
+			}
+		}
+	}
+
+	// Verify all 20 distinct ECO codes created files
+	if writer.FileCount() != len(ecoCodes) {
+		t.Errorf("FileCount=%d, want %d", writer.FileCount(), len(ecoCodes))
+	}
+
+	// Verify handle count is bounded by maxHandles
+	if writer.OpenHandleCount() > maxHandles {
+		t.Errorf("Final OpenHandleCount=%d exceeds maxHandles=%d",
+			writer.OpenHandleCount(), maxHandles)
+	}
+
+	// Close writer to flush all data
+	if err := writer.Close(); err != nil {
+		t.Fatalf("Close() failed: %v", err)
+	}
+
+	// Verify all 20 files exist on disk
+	for _, eco := range ecoCodes {
+		filename := filepath.Join(tmpDir, "eco_"+eco+".pgn")
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			t.Errorf("File %s does not exist after Close()", filename)
+		}
+	}
+}
+
