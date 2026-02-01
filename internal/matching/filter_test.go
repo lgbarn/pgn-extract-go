@@ -318,9 +318,9 @@ func TestGameFilter_LoadTagFile(t *testing.T) {
 	dir := t.TempDir()
 
 	tests := []struct {
-		name        string
-		content     string
-		wantTags    int
+		name         string
+		content      string
+		wantTags     int
 		wantPatterns int
 	}{
 		{
@@ -328,25 +328,25 @@ func TestGameFilter_LoadTagFile(t *testing.T) {
 			content: `White "Fischer"
 Result = "1-0"
 Date >= "1970.01.01"`,
-			wantTags:    3,
+			wantTags:     3,
 			wantPatterns: 0,
 		},
 		{
-			name: "FEN exact",
-			content: `FEN "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"`,
-			wantTags:    0,
+			name:         "FEN exact",
+			content:      `FEN "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"`,
+			wantTags:     0,
 			wantPatterns: 1,
 		},
 		{
-			name: "FEN pattern with wildcards",
-			content: `FEN "???????*/????????/8/8/8/8/????????/*???????"`,
-			wantTags:    0,
+			name:         "FEN pattern with wildcards",
+			content:      `FEN "???????*/????????/8/8/8/8/????????/*???????"`,
+			wantTags:     0,
 			wantPatterns: 1,
 		},
 		{
-			name: "FENPattern keyword",
-			content: `FENPattern "???????*/????????/8/8/8/8/????????/*???????"`,
-			wantTags:    0,
+			name:         "FENPattern keyword",
+			content:      `FENPattern "???????*/????????/8/8/8/8/????????/*???????"`,
+			wantTags:     0,
 			wantPatterns: 1,
 		},
 		{
@@ -356,13 +356,13 @@ White "Kasparov"
 
 FEN "???????*/????????/8/8/8/8/????????/*???????"
 Result = "1-0"`,
-			wantTags:    2,
+			wantTags:     2,
 			wantPatterns: 1,
 		},
 		{
-			name:        "empty and comments only",
-			content:     "# Just a comment\n\n# Another comment\n",
-			wantTags:    0,
+			name:         "empty and comments only",
+			content:      "# Just a comment\n\n# Another comment\n",
+			wantTags:     0,
 			wantPatterns: 0,
 		},
 	}

@@ -597,9 +597,9 @@ func TestMatchGame_WithNonMatchingMoveSequence(t *testing.T) {
 func TestMatchGame_MultipleSequencesOneMatches(t *testing.T) {
 	game := testutil.MustParseGame(t, italianGamePGN)
 	vm := NewVariationMatcher()
-	vm.AddMoveSequence([]string{"d4", "d5"})     // does not match
-	vm.AddMoveSequence([]string{"e4", "e5"})      // matches
-	vm.AddMoveSequence([]string{"c4", "e5"})      // does not match
+	vm.AddMoveSequence([]string{"d4", "d5"}) // does not match
+	vm.AddMoveSequence([]string{"e4", "e5"}) // matches
+	vm.AddMoveSequence([]string{"c4", "e5"}) // does not match
 
 	if !vm.MatchGame(game) {
 		t.Error("expected MatchGame to return true when at least one sequence matches")

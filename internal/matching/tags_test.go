@@ -71,7 +71,7 @@ func TestTagMatcher_OpRegex_NilRegex(t *testing.T) {
 
 func TestTagMatcher_OpSoundex(t *testing.T) {
 	tests := []struct {
-		name     string
+		name      string
 		criterion string
 		tagValue  string
 		expected  bool
@@ -324,11 +324,11 @@ func TestTagMatcher_StringComparison(t *testing.T) {
 
 func TestTagMatcher_ParseCriterion_AllOperators(t *testing.T) {
 	tests := []struct {
-		name     string
-		line     string
-		wantOp   TagOperator
-		wantTag  string
-		wantVal  string
+		name    string
+		line    string
+		wantOp  TagOperator
+		wantTag string
+		wantVal string
 	}{
 		{"equal explicit", `Result = "1-0"`, OpEqual, "Result", "1-0"},
 		{"less than", `Date < "2000.01.01"`, OpLessThan, "Date", "2000.01.01"},
@@ -450,7 +450,7 @@ func TestParseDate(t *testing.T) {
 	}{
 		{"1972.07.11", 19720711},
 		{"2024.01.01", 20240101},
-		{"1985.11", 19851101},   // missing day defaults to 1
+		{"1985.11", 19851101},    // missing day defaults to 1
 		{"2000", 20000101},       // year only
 		{"abc", 0},               // invalid
 		{"50.01.01", 0},          // year < 100
@@ -529,11 +529,11 @@ func TestTagMatcher_MissingTag_NonNotEqual(t *testing.T) {
 
 func TestTagMatcher_DateComparison_EdgeCases(t *testing.T) {
 	tests := []struct {
-		name      string
-		tagDate   string
-		critDate  string
-		op        TagOperator
-		expected  bool
+		name     string
+		tagDate  string
+		critDate string
+		op       TagOperator
+		expected bool
 	}{
 		{"same date lte", "2000.06.15", "2000.06.15", OpLessOrEqual, true},
 		{"same date gte", "2000.06.15", "2000.06.15", OpGreaterOrEqual, true},

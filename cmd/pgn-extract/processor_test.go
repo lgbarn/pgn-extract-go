@@ -145,7 +145,7 @@ func TestParallelDuplicateDetection_MatchesSequential(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse all test games
-			var parsedGames []*chess.Game
+			parsedGames := make([]*chess.Game, 0, len(tt.games))
 			for _, pgnStr := range tt.games {
 				game := testutil.MustParseGame(t, pgnStr)
 				parsedGames = append(parsedGames, game)
@@ -277,7 +277,7 @@ func TestParallelDuplicateDetection_WithCheckFile(t *testing.T) {
 	}
 
 	// Parse new games
-	var parsedNewGames []*chess.Game
+	parsedNewGames := make([]*chess.Game, 0, len(newGames))
 	for _, pgnStr := range newGames {
 		game := testutil.MustParseGame(t, pgnStr)
 		parsedNewGames = append(parsedNewGames, game)
@@ -640,7 +640,7 @@ func TestSplitWriterRotation(t *testing.T) {
 
 	// Write 3 "games" (just write bytes + increment)
 	for i := 0; i < 3; i++ {
-		_, err := sw.Write([]byte(fmt.Sprintf("[Event \"Game %d\"]\n\n1. e4 *\n\n", i+1)))
+		_, err := fmt.Fprintf(sw, "[Event \"Game %d\"]\n\n1. e4 *\n\n", i+1)
 		if err != nil {
 			t.Fatalf("Write failed on game %d: %v", i+1, err)
 		}
@@ -1293,4 +1293,3 @@ func TestOutputGamesParallel(t *testing.T) {
 		t.Error("Expected output to be non-empty")
 	}
 }
-

@@ -210,9 +210,9 @@ func TestMatchRank_DigitExceedsBoard(t *testing.T) {
 
 func TestInvertPattern(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		want    string
+		name  string
+		input string
+		want  string
 	}{
 		{
 			name:  "simple rank swap",

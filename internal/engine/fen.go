@@ -203,10 +203,10 @@ func parseEnPassant(board *chess.Board, parts []string) {
 // parseClocks parses the halfmove clock and fullmove number fields.
 func parseClocks(board *chess.Board, parts []string) {
 	if len(parts) >= 5 {
-		fmt.Sscanf(parts[4], "%d", &board.HalfmoveClock)
+		fmt.Sscanf(parts[4], "%d", &board.HalfmoveClock) //nolint:gosec // G104: default 0 is acceptable
 	}
 	if len(parts) >= 6 {
-		fmt.Sscanf(parts[5], "%d", &board.MoveNumber)
+		fmt.Sscanf(parts[5], "%d", &board.MoveNumber) //nolint:gosec // G104: default 0 is acceptable
 	}
 }
 

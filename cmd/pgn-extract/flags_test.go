@@ -83,7 +83,7 @@ func TestApplyContentFlags(t *testing.T) {
 		wantJSON     bool
 	}{
 		{
-			name: "all defaults (nothing suppressed)",
+			name:         "all defaults (nothing suppressed)",
 			wantComments: true, wantNAGs: true, wantVar: true,
 			wantResults: true,
 		},

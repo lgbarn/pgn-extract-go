@@ -236,7 +236,10 @@ func (ew *ECOSplitWriter) evictIfNeeded() {
 		return
 	}
 
-	entry := back.Value.(*lruFileEntry)
+	entry, ok := back.Value.(*lruFileEntry)
+	if !ok {
+		return
+	}
 	if entry.file != nil {
 		_ = entry.file.Close() // cleanup on eviction
 		entry.file = nil
@@ -482,7 +485,10 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 		// Apply move truncation before output
 		truncateMoves(result.Game)
 
-		gameInfo, _ := result.GameInfo.(*GameAnalysis)
+		gameInfo, ok := result.GameInfo.(*GameAnalysis)
+		if !ok {
+			gameInfo = nil
+		}
 		out, dup := handleGameOutput(result.Game, result.Board, gameInfo, ctx, &jsonGames)
 		atomic.AddInt64(&outputCount, int64(out))
 		atomic.AddInt64(&duplicateCount, int64(dup))

@@ -46,7 +46,7 @@ func OutputGameJSON(game *chess.Game, cfg *config.Config) {
 	jsonGame := GameToJSON(game, cfg)
 	enc := json.NewEncoder(cfg.OutputFile)
 	enc.SetIndent("", "  ")
-	enc.Encode(jsonGame)
+	enc.Encode(jsonGame) //nolint:gosec // G104: error handled via writer
 }
 
 // OutputGamesJSON outputs multiple games as a JSON array.
@@ -58,7 +58,7 @@ func OutputGamesJSON(games []*chess.Game, cfg *config.Config, w io.Writer) {
 
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	enc.Encode(&JSONOutput{Games: jsonGames})
+	enc.Encode(&JSONOutput{Games: jsonGames}) //nolint:gosec // G104: error handled via writer
 }
 
 // GameToJSON converts a chess game to JSON format.

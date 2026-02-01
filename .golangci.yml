@@ -65,6 +65,8 @@ linters:
         # Parsing functions where default value is acceptable
         - fmt.Sscanf
         - strconv.Atoi
+        # Tag matching - only fails for OpRegex, callers use known-safe ops
+        - (*github.com/lgbarn/pgn-extract-go/internal/matching.TagMatcher).AddCriterion
 
     gocognit:
       min-complexity: 50
@@ -143,6 +145,10 @@ linters:
       - path: internal/parser/lexer.go
         linters:
           - cyclop
+      # AddCriterion only returns error for OpRegex; all other callers use safe operators
+      - source: "AddCriterion"
+        linters:
+          - gosec
 
 formatters:
   enable:

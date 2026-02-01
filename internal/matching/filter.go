@@ -56,13 +56,13 @@ func (gf *GameFilter) LoadTagFile(filename string) error {
 				gf.PositionMatcher.AddPattern(rest, "", false)
 			} else {
 				if err := gf.PositionMatcher.AddFEN(rest, ""); err != nil {
-				continue // skip invalid FEN lines
-			}
+					continue // skip invalid FEN lines
+				}
 			}
 		} else {
 			if err := gf.TagMatcher.ParseCriterion(line); err != nil {
-			continue // skip unparseable criterion lines
-		}
+				continue // skip unparseable criterion lines
+			}
 		}
 	}
 
@@ -71,7 +71,7 @@ func (gf *GameFilter) LoadTagFile(filename string) error {
 
 // AddTagCriterion adds a tag criterion directly.
 func (gf *GameFilter) AddTagCriterion(tagName, value string, op TagOperator) {
-	_ = gf.TagMatcher.AddCriterion(tagName, value, op) // caller controls operator; non-regex ops cannot fail
+	gf.TagMatcher.AddCriterion(tagName, value, op)
 }
 
 // AddPlayerFilter adds a filter for player name (matches White or Black).
@@ -81,27 +81,27 @@ func (gf *GameFilter) AddPlayerFilter(name string) {
 
 // AddWhiteFilter adds a filter for White player.
 func (gf *GameFilter) AddWhiteFilter(name string) {
-	_ = gf.TagMatcher.AddCriterion("White", name, OpContains) // OpContains cannot fail
+	gf.TagMatcher.AddCriterion("White", name, OpContains)
 }
 
 // AddBlackFilter adds a filter for Black player.
 func (gf *GameFilter) AddBlackFilter(name string) {
-	_ = gf.TagMatcher.AddCriterion("Black", name, OpContains) // OpContains cannot fail
+	gf.TagMatcher.AddCriterion("Black", name, OpContains)
 }
 
 // AddECOFilter adds a filter for ECO code prefix.
 func (gf *GameFilter) AddECOFilter(eco string) {
-	_ = gf.TagMatcher.AddCriterion("ECO", eco, OpContains) // OpContains cannot fail
+	gf.TagMatcher.AddCriterion("ECO", eco, OpContains)
 }
 
 // AddResultFilter adds a filter for game result.
 func (gf *GameFilter) AddResultFilter(result string) {
-	_ = gf.TagMatcher.AddCriterion("Result", result, OpEqual) // OpEqual cannot fail
+	gf.TagMatcher.AddCriterion("Result", result, OpEqual)
 }
 
 // AddDateFilter adds a date filter with operator.
 func (gf *GameFilter) AddDateFilter(date string, op TagOperator) {
-	_ = gf.TagMatcher.AddCriterion("Date", date, op) // caller controls operator
+	gf.TagMatcher.AddCriterion("Date", date, op)
 }
 
 // AddFENFilter adds an exact FEN position filter.
