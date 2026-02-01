@@ -7,13 +7,13 @@
   "iac_validation": "auto",
   "documentation_generation": true,
   "model_routing": {
-    "validation": "haiku",
-    "building": "sonnet",
-    "planning": "sonnet",
+    "validation": "opus",
+    "building": "opus",
+    "planning": "opus",
     "architecture": "opus",
     "debugging": "opus",
-    "review": "sonnet",
-    "security_audit": "sonnet"
+    "review": "opus",
+    "security_audit": "opus"
   },
   "context_tier": "auto",
   "created_at": "2026-01-31T00:00:00Z",
