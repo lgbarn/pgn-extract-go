@@ -349,14 +349,6 @@ func TestGameFilter_Name(t *testing.T) {
 	}
 }
 
-// TestMaterialMatcher_Name verifies MaterialMatcher implements Name()
-func TestMaterialMatcher_Name(t *testing.T) {
-	matcher := NewMaterialMatcher("Q:q", false)
-	if matcher.Name() != "MaterialMatcher" {
-		t.Errorf("MaterialMatcher.Name() = %s, want MaterialMatcher", matcher.Name())
-	}
-}
-
 // TestVariationMatcher_Name verifies VariationMatcher implements Name()
 func TestVariationMatcher_Name(t *testing.T) {
 	matcher := NewVariationMatcher()
