@@ -42,7 +42,7 @@ type ProcessResult struct {
 
 // GetGameInfo returns the GameInfo if it implements the interface, or nil.
 func (r *ProcessResult) GetGameInfo() GameInfo {
-	gi, _ := r.GameInfo.(GameInfo) //nolint:errcheck // type assertion with ok returns zero value
+	gi, _ := r.GameInfo.(GameInfo)
 	return gi
 }
 

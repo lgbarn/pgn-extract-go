@@ -46,7 +46,7 @@ func OutputGameJSON(game *chess.Game, cfg *config.Config) {
 	jsonGame := GameToJSON(game, cfg)
 	enc := json.NewEncoder(cfg.OutputFile)
 	enc.SetIndent("", "  ")
-	enc.Encode(jsonGame) //nolint:errcheck,gosec // G104: output errors handled by writer
+	enc.Encode(jsonGame)
 }
 
 // OutputGamesJSON outputs multiple games as a JSON array.
@@ -58,7 +58,7 @@ func OutputGamesJSON(games []*chess.Game, cfg *config.Config, w io.Writer) {
 
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	enc.Encode(&JSONOutput{Games: jsonGames}) //nolint:errcheck,gosec // G104: output errors handled by writer
+	enc.Encode(&JSONOutput{Games: jsonGames})
 }
 
 // GameToJSON converts a chess game to JSON format.
@@ -107,7 +107,8 @@ func copyTags(tags map[string]string) map[string]string {
 // getInitialBoard returns the starting board and initial FEN (if any).
 func getInitialBoard(game *chess.Game) (*chess.Board, string) {
 	if fen := game.GetTag("FEN"); fen != "" {
-		if board, _ := engine.NewBoardFromFEN(fen); board != nil { //nolint:errcheck // nil check handles error
+		board, err := engine.NewBoardFromFEN(fen)
+		if err == nil && board != nil {
 			return board, fen
 		}
 	}

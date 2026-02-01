@@ -98,7 +98,7 @@ func (tm *TagMatcher) AddCriterion(tagName, value string, op TagOperator) error 
 
 // AddSimpleCriterion adds a simple equality criterion.
 func (tm *TagMatcher) AddSimpleCriterion(tagName, value string) {
-	tm.AddCriterion(tagName, value, OpEqual) //nolint:errcheck,gosec // G104: errors not expected
+	_ = tm.AddCriterion(tagName, value, OpEqual) // OpEqual never triggers regex compile error
 }
 
 // AddPlayerCriterion adds a criterion that matches either White or Black.
@@ -108,7 +108,7 @@ func (tm *TagMatcher) AddPlayerCriterion(playerName string) {
 	if tm.useSoundex {
 		op = OpSoundex
 	}
-	tm.AddCriterion("_Player", playerName, op) //nolint:errcheck,gosec // G104: errors not expected
+	_ = tm.AddCriterion("_Player", playerName, op) // OpContains/OpSoundex never trigger regex compile error
 }
 
 // ParseCriterion parses a criterion string like "White < \"Fischer\"".
