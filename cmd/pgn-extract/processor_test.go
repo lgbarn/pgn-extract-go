@@ -1,10 +1,14 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
+	"github.com/lgbarn/pgn-extract-go/internal/config"
 	"github.com/lgbarn/pgn-extract-go/internal/hashing"
 	"github.com/lgbarn/pgn-extract-go/internal/testutil"
 )
@@ -144,7 +148,7 @@ func TestParallelDuplicateDetection_MatchesSequential(t *testing.T) {
 			}
 
 			// Run sequential detection
-			seqDetector := hashing.NewDuplicateDetector(false)
+			seqDetector := hashing.NewDuplicateDetector(false, 0)
 			for _, game := range parsedGames {
 				board := replayGame(game)
 				seqDetector.CheckAndAdd(game, board)
@@ -255,7 +259,7 @@ func TestParallelDuplicateDetection_WithCheckFile(t *testing.T) {
 	}
 
 	// Parse checkfile games and load into base detector
-	baseDetector := hashing.NewDuplicateDetector(false)
+	baseDetector := hashing.NewDuplicateDetector(false, 0)
 	for _, pgnStr := range checkfileGames {
 		game := testutil.MustParseGame(t, pgnStr)
 		board := replayGame(game)
@@ -325,6 +329,128 @@ func TestParallelDuplicateDetection_WithCheckFile(t *testing.T) {
 	if tsDetector.DuplicateCount() != expectedDuplicates {
 		t.Errorf("DuplicateCount mismatch: expected %d, got %d",
 			expectedDuplicates, tsDetector.DuplicateCount())
+	}
+}
+
+// makeMinimalGame creates a minimal game with a given ECO code for testing.
+func makeMinimalGame(eco string) *chess.Game {
+	game := chess.NewGame()
+	game.SetTag("Event", "Test")
+	game.SetTag("White", "TestWhite")
+	game.SetTag("Black", "TestBlack")
+	game.SetTag("ECO", eco)
+	game.SetTag("Result", "*")
+	return game
+}
+
+// TestECOSplitWriter_LRU_EvictsOldestHandle verifies that the LRU cache
+// evicts the least recently used file handle when maxHandles is exceeded.
+func TestECOSplitWriter_LRU_EvictsOldestHandle(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseName := filepath.Join(tmpDir, "eco")
+	cfg := config.NewConfig()
+	cfg.OutputFile = os.Stdout
+
+	writer := NewECOSplitWriter(baseName, 3, cfg, 3) // maxHandles=3
+	defer writer.Close()
+
+	// Write games with 4 different ECO codes
+	ecoCodes := []string{"A00", "B00", "C00", "D00"}
+	for _, eco := range ecoCodes {
+		game := makeMinimalGame(eco)
+		if err := writer.WriteGame(game); err != nil {
+			t.Fatalf("WriteGame(%s) failed: %v", eco, err)
+		}
+	}
+
+	// Verify: All 4 files should exist
+	if writer.FileCount() != 4 {
+		t.Errorf("FileCount = %d, want 4", writer.FileCount())
+	}
+
+	// Verify: Only 3 file handles should be open (A00 was evicted)
+	if writer.OpenHandleCount() != 3 {
+		t.Errorf("OpenHandleCount = %d, want 3", writer.OpenHandleCount())
+	}
+
+	// Verify all 4 files exist on disk
+	for _, eco := range ecoCodes {
+		filename := filepath.Join(tmpDir, "eco_"+eco+".pgn")
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			t.Errorf("File %s does not exist", filename)
+		}
+	}
+}
+
+// TestECOSplitWriter_LRU_ReopensEvictedFile verifies that evicted files
+// are reopened in append mode when accessed again.
+func TestECOSplitWriter_LRU_ReopensEvictedFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseName := filepath.Join(tmpDir, "eco")
+	cfg := config.NewConfig()
+	cfg.OutputFile = os.Stdout
+
+	writer := NewECOSplitWriter(baseName, 3, cfg, 2) // maxHandles=2
+	defer writer.Close()
+
+	// Write A00, B00, C00 (A00 gets evicted)
+	for _, eco := range []string{"A00", "B00", "C00"} {
+		game := makeMinimalGame(eco)
+		if err := writer.WriteGame(game); err != nil {
+			t.Fatalf("WriteGame(%s) failed: %v", eco, err)
+		}
+	}
+
+	// Write A00 again (should reopen and append)
+	game := makeMinimalGame("A00")
+	if err := writer.WriteGame(game); err != nil {
+		t.Fatalf("WriteGame(A00) second time failed: %v", err)
+	}
+
+	// Close to flush all writes
+	writer.Close()
+
+	// Verify A00 file has both games (contains "Event" twice)
+	filename := filepath.Join(tmpDir, "eco_A00.pgn")
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) failed: %v", filename, err)
+	}
+
+	eventCount := strings.Count(string(content), "[Event")
+	if eventCount != 2 {
+		t.Errorf("A00 file has %d games, want 2", eventCount)
+	}
+}
+
+// TestECOSplitWriter_LRU_UnlimitedWhenHigh verifies that when maxHandles
+// is high, all handles remain open without eviction.
+func TestECOSplitWriter_LRU_UnlimitedWhenHigh(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseName := filepath.Join(tmpDir, "eco")
+	cfg := config.NewConfig()
+	cfg.OutputFile = os.Stdout
+
+	writer := NewECOSplitWriter(baseName, 3, cfg, 1000) // maxHandles=1000
+	defer writer.Close()
+
+	// Write 10 different ECO codes
+	ecoCodes := []string{"A00", "A01", "B00", "B01", "C00", "C01", "D00", "D01", "E00", "E01"}
+	for _, eco := range ecoCodes {
+		game := makeMinimalGame(eco)
+		if err := writer.WriteGame(game); err != nil {
+			t.Fatalf("WriteGame(%s) failed: %v", eco, err)
+		}
+	}
+
+	// Verify: All 10 files created
+	if writer.FileCount() != 10 {
+		t.Errorf("FileCount = %d, want 10", writer.FileCount())
+	}
+
+	// Verify: All 10 handles still open (no eviction)
+	if writer.OpenHandleCount() != 10 {
+		t.Errorf("OpenHandleCount = %d, want 10", writer.OpenHandleCount())
 	}
 }
 
