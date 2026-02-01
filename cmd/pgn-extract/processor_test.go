@@ -155,7 +155,7 @@ func TestParallelDuplicateDetection_MatchesSequential(t *testing.T) {
 			}
 
 			// Run parallel detection with 4 goroutines
-			tsDetector := hashing.NewThreadSafeDuplicateDetector(false)
+			tsDetector := hashing.NewThreadSafeDuplicateDetector(false, 0)
 			var wg sync.WaitGroup
 			const numWorkers = 4
 			gamesPerWorker := len(parsedGames) / numWorkers
@@ -280,7 +280,7 @@ func TestParallelDuplicateDetection_WithCheckFile(t *testing.T) {
 	}
 
 	// Create thread-safe detector and load from base
-	tsDetector := hashing.NewThreadSafeDuplicateDetector(false)
+	tsDetector := hashing.NewThreadSafeDuplicateDetector(false, 0)
 	tsDetector.LoadFromDetector(baseDetector)
 
 	// Verify initial state after loading

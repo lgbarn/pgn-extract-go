@@ -100,7 +100,7 @@ func main() {
 		if *outputFile != "" {
 			base = strings.TrimSuffix(*outputFile, filepath.Ext(*outputFile))
 		}
-		ecoSplitWriter = NewECOSplitWriter(base, *ecoSplit, cfg, 128)
+		ecoSplitWriter = NewECOSplitWriter(base, *ecoSplit, cfg, cfg.Output.ECOMaxHandles)
 	}
 
 	// Set up same-setup duplicate detection
@@ -219,13 +219,13 @@ func setupDuplicateDetector(cfg *config.Config) hashing.DuplicateChecker {
 		}
 
 		// Create thread-safe detector and load from temporary detector
-		detector := hashing.NewThreadSafeDuplicateDetector(false)
+		detector := hashing.NewThreadSafeDuplicateDetector(false, 0)
 		detector.LoadFromDetector(tempDetector)
 		return detector
 	}
 
 	// No check file - create empty thread-safe detector
-	return hashing.NewThreadSafeDuplicateDetector(false)
+	return hashing.NewThreadSafeDuplicateDetector(false, 0)
 }
 
 // loadECOClassifier loads the ECO classification file if specified.
