@@ -160,7 +160,7 @@ func TestReplayGame(t *testing.T) {
 	}
 }
 
-// TestGameAnalysis_Interface verifies GameAnalysis implements worker.GameInfo
+// TestGameAnalysis_Interface verifies GameAnalysis accessor methods.
 func TestGameAnalysis_Interface(t *testing.T) {
 	analysis := &GameAnalysis{
 		HasFiftyMoveRule:  true,

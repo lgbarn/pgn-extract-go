@@ -305,9 +305,16 @@ func MustBoardFromFEN(fen string) *chess.Board {
 	return board
 }
 
+// cachedInitialBoard holds the pre-parsed initial position as a value.
+// Board is a pure value type (fixed arrays + scalars, no pointers/slices),
+// so assignment copies it fully.
+var cachedInitialBoard = *MustBoardFromFEN(InitialFEN)
+
 // NewInitialBoard creates a board with the standard starting position.
+// Returns a fresh copy each time since callers mutate the board.
 func NewInitialBoard() *chess.Board {
-	return MustBoardFromFEN(InitialFEN)
+	b := cachedInitialBoard // value copy
+	return &b
 }
 
 // NewBoardForGame creates a board for a game, using FEN tag if present.

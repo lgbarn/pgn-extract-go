@@ -485,7 +485,7 @@ func outputGamesParallel(games []*chess.Game, ctx *ProcessingContext, numWorkers
 		// Apply move truncation before output
 		truncateMoves(result.Game)
 
-		gameInfo, _ := result.GameInfo.(*GameAnalysis)
+		gameInfo, _ := result.GameInfo.(*GameAnalysis) //nolint:errcheck // type assertion ok-bool, nil is valid fallback
 		out, dup := handleGameOutput(result.Game, result.Board, gameInfo, ctx, &jsonGames)
 		atomic.AddInt64(&outputCount, int64(out))
 		atomic.AddInt64(&duplicateCount, int64(dup))

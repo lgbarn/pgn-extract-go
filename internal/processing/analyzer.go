@@ -24,17 +24,17 @@ type GameAnalysis struct {
 	HasMaterialOdds         bool
 }
 
-// FiftyMoveTriggered implements worker.GameInfo.
+// FiftyMoveTriggered returns true if the game triggered the fifty-move rule.
 func (ga *GameAnalysis) FiftyMoveTriggered() bool {
 	return ga.HasFiftyMoveRule
 }
 
-// RepetitionDetected implements worker.GameInfo.
+// RepetitionDetected returns true if the game has a threefold repetition.
 func (ga *GameAnalysis) RepetitionDetected() bool {
 	return ga.HasRepetition
 }
 
-// UnderpromotionFound implements worker.GameInfo.
+// UnderpromotionFound returns true if any pawn promoted to non-queen.
 func (ga *GameAnalysis) UnderpromotionFound() bool {
 	return ga.HasUnderpromotion
 }
