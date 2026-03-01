@@ -3,21 +3,12 @@ package cql
 import (
 	"testing"
 
-	"github.com/lgbarn/pgn-extract-go/internal/chess"
 	"github.com/lgbarn/pgn-extract-go/internal/engine"
 )
 
-func setupBoard(fen string) *chess.Board {
-	board, err := engine.NewBoardFromFEN(fen)
-	if err != nil {
-		panic("invalid FEN: " + err.Error())
-	}
-	return board
-}
-
 func TestEvalPieceOnSquare(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -68,7 +59,7 @@ func TestEvalSideToMove(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.cql, func(t *testing.T) {
-			board := setupBoard(tt.fen)
+			board := engine.MustBoardFromFEN(tt.fen)
 			node, err := Parse(tt.cql)
 			if err != nil {
 				t.Fatalf("Parse error: %v", err)
@@ -98,7 +89,7 @@ func TestEvalCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			board := setupBoard(tt.fen)
+			board := engine.MustBoardFromFEN(tt.fen)
 			node, err := Parse("check")
 			if err != nil {
 				t.Fatalf("Parse error: %v", err)
@@ -128,7 +119,7 @@ func TestEvalMate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			board := setupBoard(tt.fen)
+			board := engine.MustBoardFromFEN(tt.fen)
 			node, err := Parse("mate")
 			if err != nil {
 				t.Fatalf("Parse error: %v", err)
@@ -157,7 +148,7 @@ func TestEvalStalemate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			board := setupBoard(tt.fen)
+			board := engine.MustBoardFromFEN(tt.fen)
 			node, err := Parse("stalemate")
 			if err != nil {
 				t.Fatalf("Parse error: %v", err)
@@ -174,7 +165,7 @@ func TestEvalStalemate(t *testing.T) {
 }
 
 func TestEvalLogicalAnd(t *testing.T) {
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -204,7 +195,7 @@ func TestEvalLogicalAnd(t *testing.T) {
 }
 
 func TestEvalLogicalOr(t *testing.T) {
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -233,7 +224,7 @@ func TestEvalLogicalOr(t *testing.T) {
 }
 
 func TestEvalLogicalNot(t *testing.T) {
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -278,7 +269,7 @@ func TestEvalAttack(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			board := setupBoard(tt.fen)
+			board := engine.MustBoardFromFEN(tt.fen)
 			node, err := Parse(tt.cql)
 			if err != nil {
 				t.Fatalf("Parse error: %v", err)
@@ -296,7 +287,7 @@ func TestEvalAttack(t *testing.T) {
 
 func TestEvalComplexQuery(t *testing.T) {
 	// Fool's mate position
-	board := setupBoard("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3")
+	board := engine.MustBoardFromFEN("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3")
 
 	tests := []struct {
 		cql      string
@@ -329,7 +320,7 @@ func TestEvalComplexQuery(t *testing.T) {
 
 func TestEvalPieceDesignatorAnyWhite(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -361,7 +352,7 @@ func TestEvalPieceDesignatorAnyWhite(t *testing.T) {
 
 func TestEvalPieceDesignatorAnyBlack(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -393,7 +384,7 @@ func TestEvalPieceDesignatorAnyBlack(t *testing.T) {
 
 func TestEvalPieceDesignatorEmpty(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -424,7 +415,7 @@ func TestEvalPieceDesignatorEmpty(t *testing.T) {
 
 func TestEvalPieceDesignatorAny(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -455,7 +446,7 @@ func TestEvalPieceDesignatorAny(t *testing.T) {
 
 func TestEvalPieceSet(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -489,7 +480,7 @@ func TestEvalPieceSet(t *testing.T) {
 
 func TestEvalSquareSetRank(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -520,7 +511,7 @@ func TestEvalSquareSetRank(t *testing.T) {
 
 func TestEvalSquareSetFile(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -552,7 +543,7 @@ func TestEvalSquareSetFile(t *testing.T) {
 
 func TestEvalSquareSetQuadrant(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -584,7 +575,7 @@ func TestEvalSquareSetQuadrant(t *testing.T) {
 
 func TestEvalSquareSetAny(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -615,7 +606,7 @@ func TestEvalSquareSetAny(t *testing.T) {
 
 func TestEvalCount(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -650,7 +641,7 @@ func TestEvalCount(t *testing.T) {
 func TestEvalMaterial(t *testing.T) {
 	// Standard starting position
 	// White material: 8*1 (pawns) + 2*3 (knights) + 2*3 (bishops) + 2*5 (rooks) + 1*9 (queen) = 8+6+6+10+9 = 39
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -682,7 +673,7 @@ func TestEvalMaterial(t *testing.T) {
 
 func TestEvalMaterialImbalance(t *testing.T) {
 	// Position with material imbalance: white is up a queen
-	board := setupBoard("rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string

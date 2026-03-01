@@ -2,11 +2,13 @@ package cql
 
 import (
 	"testing"
+
+	"github.com/lgbarn/pgn-extract-go/internal/engine"
 )
 
 func TestTransformFlipHorizontal(t *testing.T) {
 	// Position with white king on g1 (already castled)
-	board := setupBoard("r1bq1rk1/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQ1RK1 w - - 6 5")
+	board := engine.MustBoardFromFEN("r1bq1rk1/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQ1RK1 w - - 6 5")
 
 	tests := []struct {
 		cql      string
@@ -39,7 +41,7 @@ func TestTransformFlipHorizontal(t *testing.T) {
 
 func TestTransformFlipVertical(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -72,7 +74,7 @@ func TestTransformFlipVertical(t *testing.T) {
 
 func TestTransformFlipColor(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -105,7 +107,7 @@ func TestTransformFlipColor(t *testing.T) {
 
 func TestTransformShift(t *testing.T) {
 	// Position with king in corner
-	board := setupBoard("7k/8/8/8/8/8/8/K7 w - - 0 1")
+	board := engine.MustBoardFromFEN("7k/8/8/8/8/8/8/K7 w - - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -138,7 +140,7 @@ func TestTransformShift(t *testing.T) {
 
 func TestTransformShiftHorizontal(t *testing.T) {
 	// White king on e1
-	board := setupBoard("8/8/8/8/8/8/8/4K3 w - - 0 1")
+	board := engine.MustBoardFromFEN("8/8/8/8/8/8/8/4K3 w - - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -170,7 +172,7 @@ func TestTransformShiftHorizontal(t *testing.T) {
 
 func TestTransformShiftVertical(t *testing.T) {
 	// White king on e1
-	board := setupBoard("8/8/8/8/8/8/8/4K3 w - - 0 1")
+	board := engine.MustBoardFromFEN("8/8/8/8/8/8/8/4K3 w - - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -202,7 +204,7 @@ func TestTransformShiftVertical(t *testing.T) {
 
 func TestTransformCombined(t *testing.T) {
 	// Standard starting position
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string

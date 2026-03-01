@@ -130,15 +130,7 @@ func outputMoves(game *chess.Game, cfg *config.Config, w io.Writer) {
 	ow := NewOutputWriter(w, int(cfg.Output.MaxLineLength))
 
 	// Start with initial position or FEN
-	var board *chess.Board
-	if fen := game.GetTag("FEN"); fen != "" {
-		if b, err := engine.NewBoardFromFEN(fen); err == nil {
-			board = b
-		}
-	}
-	if board == nil {
-		board = engine.NewInitialBoard()
-	}
+	board := engine.NewBoardForGame(game)
 
 	moveNum := board.MoveNumber
 	isWhite := board.ToMove == chess.White

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lgbarn/pgn-extract-go/internal/chess"
+	"github.com/lgbarn/pgn-extract-go/internal/engine"
 )
 
 func TestEvalResult(t *testing.T) {
@@ -15,7 +16,7 @@ func TestEvalResult(t *testing.T) {
 			"Black":  "Spassky",
 		},
 	}
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -51,7 +52,7 @@ func TestEvalPlayer(t *testing.T) {
 			"Black": "Spassky, Boris",
 		},
 	}
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -87,7 +88,7 @@ func TestEvalYear(t *testing.T) {
 			"Date": "1972.07.11",
 		},
 	}
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -126,7 +127,7 @@ func TestEvalElo(t *testing.T) {
 			"BlackElo": "2660",
 		},
 	}
-	board := setupBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	board := engine.MustBoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -157,7 +158,7 @@ func TestEvalElo(t *testing.T) {
 
 func TestEvalBetween(t *testing.T) {
 	// Position with pieces to test between filter
-	board := setupBoard("8/8/8/3q4/8/8/8/R3K3 w - - 0 1")
+	board := engine.MustBoardFromFEN("8/8/8/3q4/8/8/8/R3K3 w - - 0 1")
 
 	tests := []struct {
 		cql      string
@@ -190,7 +191,7 @@ func TestEvalBetween(t *testing.T) {
 
 func TestEvalPin(t *testing.T) {
 	// Position with pinned piece: black bishop on c6 pins white knight on d5 to white king on e4
-	board := setupBoard("8/8/2b5/3N4/4K3/8/8/8 w - - 0 1")
+	board := engine.MustBoardFromFEN("8/8/2b5/3N4/4K3/8/8/8 w - - 0 1")
 
 	tests := []struct {
 		name     string
@@ -222,7 +223,7 @@ func TestEvalPin(t *testing.T) {
 
 func TestEvalRay(t *testing.T) {
 	// Position with pieces along a ray
-	board := setupBoard("8/8/8/8/R3K3/8/8/8 w - - 0 1")
+	board := engine.MustBoardFromFEN("8/8/8/8/R3K3/8/8/8 w - - 0 1")
 
 	tests := []struct {
 		name     string
