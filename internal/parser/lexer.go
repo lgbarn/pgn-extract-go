@@ -245,7 +245,8 @@ func (l *Lexer) getNextSymbol() *Token {
 		for l.pos < len(l.line) && chTab[l.currentChar()] == CheckSymbol {
 			l.advance()
 		}
-		return &Token{Type: CheckSymbol}
+		text := l.line[symbolStart:l.pos]
+		return &Token{Type: CheckSymbol, TokenString: text}
 
 	case Dot:
 		// Skip dots
