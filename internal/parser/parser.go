@@ -194,7 +194,11 @@ func (p *Parser) parseMoveUnit() *chess.Move {
 
 	// Handle check symbol (sometimes + is followed by #)
 	for p.currentToken.Type == CheckSymbol {
-		move.Text += "+"
+		if p.currentToken.TokenString != "" {
+			move.Text += p.currentToken.TokenString
+		} else {
+			move.Text += "+"
+		}
 		p.nextToken()
 	}
 

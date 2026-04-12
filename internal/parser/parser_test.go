@@ -75,6 +75,9 @@ func TestParseFoolsMate(t *testing.T) {
 	if count := game.PlyCount(); count != 4 {
 		t.Errorf("PlyCount = %d, want 4", count)
 	}
+	if got := game.LastMove().Text; got != "Qh4#" {
+		t.Errorf("Last move text = %q, want %q", got, "Qh4#")
+	}
 	if got := game.LastMove().TerminatingResult; got != "0-1" {
 		t.Errorf("Result = %q, want %q", got, "0-1")
 	}
